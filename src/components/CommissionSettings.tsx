@@ -1,0 +1,182 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { CommissionRate, ReservationSource, RoomType } from '@/types';
+import { fetchCommissionRates, upsertCommissionRate } from '@/lib/supabase-db-v2';
+import { getSourceLabel, cn } from '@/lib/utils';
+import { Save, Percent, Tag } from 'lucide-react';
+import { showToast } from './Toast';
+
+export default function CommissionSettings() {
+  const [rates, setRates] = useState<CommissionRate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    rate_percent: '',
+    promo_rate_percent: '',
+    promo_start: '',
+    promo_end: '',
+  });
+
+  useEffect(() => {
+    fetchCommissionRates().then((data) => {
+      setRates(data);
+      setLoading(false);
+    });
+  }, []);
+
+  const startEdit = (rate: CommissionRate) => {
+    setEditingId(rate.id);
+    setEditForm({
+      rate_percent: String(rate.rate_percent),
+      promo_rate_percent: rate.promo_rate_percent ? String(rate.promo_rate_percent) : '',
+      promo_start: rate.promo_start || '',
+      promo_end: rate.promo_end || '',
+    });
+  };
+
+  const saveEdit = async (id: string) => {
+    const updates: Partial<CommissionRate> = {
+      id,
+      rate_percent: parseFloat(editForm.rate_percent),
+      promo_rate_percent: editForm.promo_rate_percent ? parseFloat(editForm.promo_rate_percent) : undefined,
+      promo_start: editForm.promo_start || undefined,
+      promo_end: editForm.promo_end || undefined,
+    };
+
+    const saved = await upsertCommissionRate(updates);
+    setRates((prev) => prev.map((r) => (r.id === id ? saved : r)));
+    setEditingId(null);
+    showToast({ type: 'success', title: '수수료율 저장', message: '수수료율이 업데이트되었습니다.' });
+  };
+
+  const isPromoActive = (rate: CommissionRate) => {
+    if (!rate.promo_start || !rate.promo_end || !rate.promo_rate_percent) return false;
+    const now = new Date().toISOString().split('T')[0];
+    return now >= rate.promo_start && now <= rate.promo_end;
+  };
+
+  const getEffectiveRate = (rate: CommissionRate) => {
+    return isPromoActive(rate) ? rate.promo_rate_percent! : rate.rate_percent;
+  };
+
+  if (loading) return <div className="text-center text-gray-400 py-8">로딩 중...</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border">
+        <div className="p-4 border-b">
+          <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+            <Percent size={16} /> OTA 수수료율 설정
+          </h3>
+          <p className="text-xs text-gray-400 mt-1">프로모션 기간 설정 시 해당 기간에 프로모션 수수료율이 자동 적용됩니다.</p>
+        </div>
+        <div className="divide-y">
+          {rates.map((rate) => {
+            const promo = isPromoActive(rate);
+            const editing = editingId === rate.id;
+
+            return (
+              <div key={rate.id} className={cn('p-4', promo && 'bg-green-50/50')}>
+                {editing ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium',
+                        rate.source === 'yanolja' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'
+                      )}>
+                        {getSourceLabel(rate.source as ReservationSource)}
+                      </span>
+                      <span className="text-xs text-gray-500">{rate.room_type}</span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <label className="block">
+                        <span className="text-xs text-gray-500">기본 수수료율 (%)</span>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={editForm.rate_percent}
+                          onChange={(e) => setEditForm({ ...editForm, rate_percent: e.target.value })}
+                          className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs text-gray-500">프로모션 수수료율 (%)</span>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={editForm.promo_rate_percent}
+                          onChange={(e) => setEditForm({ ...editForm, promo_rate_percent: e.target.value })}
+                          className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
+                          placeholder="미입력시 비활성"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs text-gray-500">프로모션 시작</span>
+                        <input
+                          type="date"
+                          value={editForm.promo_start}
+                          onChange={(e) => setEditForm({ ...editForm, promo_start: e.target.value })}
+                          className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs text-gray-500">프로모션 종료</span>
+                        <input
+                          type="date"
+                          value={editForm.promo_end}
+                          onChange={(e) => setEditForm({ ...editForm, promo_end: e.target.value })}
+                          className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
+                        />
+                      </label>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => setEditingId(null)} className="px-3 py-1.5 text-sm text-gray-500">취소</button>
+                      <button
+                        onClick={() => saveEdit(rate.id)}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-gray-800 text-white rounded-lg text-sm"
+                      >
+                        <Save size={14} /> 저장
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="flex items-center justify-between cursor-pointer hover:bg-gray-50 -m-4 p-4 rounded-lg"
+                    onClick={() => startEdit(rate)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium',
+                        rate.source === 'yanolja' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'
+                      )}>
+                        {getSourceLabel(rate.source as ReservationSource)}
+                      </span>
+                      <span className="text-sm text-gray-600">{rate.room_type}</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className={cn('text-lg font-bold', promo ? 'text-green-600' : 'text-gray-800')}>
+                          {getEffectiveRate(rate)}%
+                        </p>
+                        {promo && (
+                          <p className="text-xs text-green-500 flex items-center gap-1">
+                            <Tag size={10} /> 프로모션 적용중 (기본: {rate.rate_percent}%)
+                          </p>
+                        )}
+                      </div>
+                      {rate.promo_start && rate.promo_end && (
+                        <div className="text-xs text-gray-400 text-right">
+                          <p>{rate.promo_start}</p>
+                          <p>~ {rate.promo_end}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
