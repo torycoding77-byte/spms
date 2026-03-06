@@ -108,7 +108,7 @@ export default function WalkinModal({ roomNumber, initialCheckIn, onClose }: Pro
                 checked={form.stay_type === 'hourly'}
                 onChange={() => {
                   const checkout = new Date(baseCheckIn);
-                  checkout.setHours(checkout.getHours() + 4);
+                  checkout.setHours(checkout.getHours() + 3);
                   setForm({ ...form, stay_type: 'hourly', check_out: checkout.toISOString().slice(0, 16) });
                 }}
                 className="accent-amber-500"
