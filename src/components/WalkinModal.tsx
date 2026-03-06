@@ -7,23 +7,24 @@ import { X } from 'lucide-react';
 
 interface Props {
   roomNumber: string;
+  initialCheckIn?: string; // ISO datetime-local string (YYYY-MM-DDTHH:mm)
   onClose: () => void;
 }
 
-export default function WalkinModal({ roomNumber, onClose }: Props) {
+export default function WalkinModal({ roomNumber, initialCheckIn, onClose }: Props) {
   const { addReservations } = useStore();
-  const now = new Date();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(11, 0, 0, 0);
+  const baseCheckIn = initialCheckIn ? new Date(initialCheckIn) : new Date();
+  const defaultCheckOut = new Date(baseCheckIn);
+  defaultCheckOut.setDate(defaultCheckOut.getDate() + 1);
+  defaultCheckOut.setHours(11, 0, 0, 0);
 
   const [form, setForm] = useState({
     guest_name: '',
     guest_phone: '',
     guest_vehicle: '',
     stay_type: 'nightly' as StayType,
-    check_in: now.toISOString().slice(0, 16),
-    check_out: tomorrow.toISOString().slice(0, 16),
+    check_in: baseCheckIn.toISOString().slice(0, 16),
+    check_out: defaultCheckOut.toISOString().slice(0, 16),
     sale_price: '',
     payment_method: 'cash' as PaymentMethod,
     memo: '',
@@ -106,7 +107,7 @@ export default function WalkinModal({ roomNumber, onClose }: Props) {
                 value="hourly"
                 checked={form.stay_type === 'hourly'}
                 onChange={() => {
-                  const checkout = new Date(now);
+                  const checkout = new Date(baseCheckIn);
                   checkout.setHours(checkout.getHours() + 4);
                   setForm({ ...form, stay_type: 'hourly', check_out: checkout.toISOString().slice(0, 16) });
                 }}
@@ -120,7 +121,7 @@ export default function WalkinModal({ roomNumber, onClose }: Props) {
                 name="stay_type"
                 value="nightly"
                 checked={form.stay_type === 'nightly'}
-                onChange={() => setForm({ ...form, stay_type: 'nightly', check_out: tomorrow.toISOString().slice(0, 16) })}
+                onChange={() => setForm({ ...form, stay_type: 'nightly', check_out: defaultCheckOut.toISOString().slice(0, 16) })}
                 className="accent-indigo-500"
               />
               <span className="text-sm font-medium">숙박</span>

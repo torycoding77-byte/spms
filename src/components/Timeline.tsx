@@ -24,6 +24,7 @@ export default function Timeline() {
   const [viewDays, setViewDays] = useState(1);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [walkinRoom, setWalkinRoom] = useState<string | null>(null);
+  const [walkinCheckIn, setWalkinCheckIn] = useState<string | undefined>(undefined);
   const [dragReservation, setDragReservation] = useState<string | null>(null);
   const [autoAssigning, setAutoAssigning] = useState(false);
 
@@ -276,7 +277,23 @@ export default function Timeline() {
                   >
                     <span className="text-sm font-semibold text-gray-700">{room.room_number}</span>
                   </div>
-                  <div className="flex-1 relative" style={{ height: '48px' }}>
+                  <div
+                    className="flex-1 relative cursor-pointer"
+                    style={{ height: '48px' }}
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const x = e.clientX - rect.left;
+                      const ratio = x / rect.width;
+                      const clickedHour = Math.floor(ratio * totalHours);
+                      const dayOffset = Math.floor(clickedHour / 24);
+                      const hour = clickedHour % 24;
+                      const clickedDate = new Date(dates[0]);
+                      clickedDate.setDate(clickedDate.getDate() + dayOffset);
+                      clickedDate.setHours(hour, 0, 0, 0);
+                      setWalkinCheckIn(clickedDate.toISOString().slice(0, 16));
+                      setWalkinRoom(room.room_number);
+                    }}
+                  >
                     {Array.from({ length: totalHours }).map((_, i) => (
                       <div
                         key={i}
@@ -297,7 +314,7 @@ export default function Timeline() {
                               : `${getBlockColor(res)} border-transparent`
                           )}
                           style={style}
-                          onClick={() => setSelectedReservation(res)}
+                          onClick={(e) => { e.stopPropagation(); setSelectedReservation(res); }}
                           title={`${res.guest_name} | ${getSourceLabel(res.source)} | ${isHourly ? '대실' : '숙박'} | ${formatCurrency(res.sale_price)}`}
                         >
                           <span className="truncate">
@@ -325,7 +342,8 @@ export default function Timeline() {
       {walkinRoom && (
         <WalkinModal
           roomNumber={walkinRoom}
-          onClose={() => setWalkinRoom(null)}
+          initialCheckIn={walkinCheckIn}
+          onClose={() => { setWalkinRoom(null); setWalkinCheckIn(undefined); }}
         />
       )}
     </div>
