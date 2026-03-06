@@ -6,12 +6,13 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, CalendarDays, Upload, BedDouble,
   Receipt, Users, ChevronLeft, ChevronRight, Wrench,
-  BarChart3, Settings, Menu, X, Calculator
+  BarChart3, Settings, Menu, X, Calculator, ClipboardList
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 
 const NAV_ITEMS = [
   { href: '/', label: '대시보드', icon: LayoutDashboard },
+  { href: '/reservations', label: '예약 관리', icon: ClipboardList },
   { href: '/timeline', label: '예약 타임라인', icon: CalendarDays },
   { href: '/upload', label: '엑셀 업로드', icon: Upload },
   { href: '/rooms', label: '객실 관리', icon: BedDouble },
