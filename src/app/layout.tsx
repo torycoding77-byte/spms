@@ -1,8 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import Sidebar from '@/components/Sidebar';
-import SupabaseProvider from '@/components/SupabaseProvider';
-import ToastContainer from '@/components/Toast';
+import ClientLayout from '@/components/ClientLayout';
 
 export const metadata: Metadata = {
   title: 'Flamingo PMS - One Hotel System',
@@ -13,13 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body className="bg-gray-50 min-h-screen">
-        <SupabaseProvider>
-          <Sidebar />
-          <main className="md:ml-60 transition-all duration-300 p-4 md:p-6 pt-16 md:pt-6">
-            {children}
-          </main>
-          <ToastContainer />
-        </SupabaseProvider>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );
