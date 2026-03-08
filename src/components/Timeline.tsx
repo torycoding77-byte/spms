@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { Reservation } from '@/types';
 import { cn, getSourceColor, getSourceLabel, formatCurrency, formatTime, getDaysInRange } from '@/lib/utils';
@@ -9,6 +9,12 @@ import ReservationModal from './ReservationModal';
 import WalkinModal from './WalkinModal';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
+
+interface DragInfo {
+  reservationId: string;
+  type: 'unassigned' | 'existing';
+  offsetRatio: number; // 블록 내 클릭 위치 비율 (기존 예약 시간 보정용)
+}
 
 // 두 예약의 시간이 겹치는지 확인
 function isOverlapping(a: { check_in: string; check_out: string }, b: { check_in: string; check_out: string }): boolean {
@@ -25,8 +31,10 @@ export default function Timeline() {
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [walkinRoom, setWalkinRoom] = useState<string | null>(null);
   const [walkinCheckIn, setWalkinCheckIn] = useState<string | undefined>(undefined);
-  const [dragReservation, setDragReservation] = useState<string | null>(null);
+  const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
+  const [dropPreview, setDropPreview] = useState<{ room: string; hour: number } | null>(null);
   const [autoAssigning, setAutoAssigning] = useState(false);
+  const timelineRowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const dates = useMemo(() => getDaysInRange(selectedDate, viewDays), [selectedDate, viewDays]);
 
@@ -76,11 +84,69 @@ export default function Timeline() {
     setSelectedDate(d.toISOString().split('T')[0]);
   };
 
-  // 드래그앤드롭: 미배정 예약 → 객실 배정
-  const handleDrop = async (roomNumber: string) => {
-    if (!dragReservation) return;
-    await updateReservation(dragReservation, { room_number: roomNumber });
-    setDragReservation(null);
+  // 드래그앤드롭 핸들러
+  const handleDrop = async (roomNumber: string, e: React.DragEvent) => {
+    e.preventDefault();
+    setDropPreview(null);
+    if (!dragInfo) return;
+
+    const res = reservations.find((r) => r.id === dragInfo.reservationId);
+    if (!res) { setDragInfo(null); return; }
+
+    const rowEl = timelineRowRefs.current.get(roomNumber);
+    if (!rowEl) { setDragInfo(null); return; }
+
+    if (dragInfo.type === 'unassigned') {
+      // 미배정: 객실만 배정 (기존 동작)
+      await updateReservation(dragInfo.reservationId, { room_number: roomNumber });
+      setDragInfo(null);
+      return;
+    }
+
+    // 기존 예약 이동: 새 시간 + 객실 계산
+    const dropHourRaw = getDropHour(e, rowEl);
+    const checkIn = new Date(res.check_in);
+    const checkOut = new Date(res.check_out);
+    const durationMs = checkOut.getTime() - checkIn.getTime();
+    const durationHours = durationMs / (1000 * 60 * 60);
+
+    // 드래그 시작 시 블록 내 오프셋 보정
+    const newStartHour = Math.max(0, Math.min(totalHours - durationHours, dropHourRaw - dragInfo.offsetRatio * durationHours));
+    const snappedHour = Math.round(newStartHour * 2) / 2; // 30분 단위 스냅
+
+    const dayStart = new Date(dates[0]);
+    dayStart.setHours(0, 0, 0, 0);
+    const newCheckIn = new Date(dayStart.getTime() + snappedHour * 60 * 60 * 1000);
+    const newCheckOut = new Date(newCheckIn.getTime() + durationMs);
+
+    // 변경 없으면 무시
+    if (roomNumber === res.room_number && newCheckIn.getTime() === checkIn.getTime()) {
+      setDragInfo(null);
+      return;
+    }
+
+    // 충돌 체크 (자기 자신 제외)
+    const conflict = reservations.some((r) =>
+      r.id !== res.id &&
+      r.room_number === roomNumber &&
+      r.status !== 'cancelled' &&
+      isOverlapping(
+        { check_in: newCheckIn.toISOString(), check_out: newCheckOut.toISOString() },
+        r
+      )
+    );
+
+    if (conflict) {
+      setDragInfo(null);
+      return;
+    }
+
+    await updateReservation(res.id, {
+      room_number: roomNumber,
+      check_in: newCheckIn.toISOString(),
+      check_out: newCheckOut.toISOString(),
+    });
+    setDragInfo(null);
   };
 
   // 자동 배정: 미배정 예약을 시간 충돌 없는 객실에 자동 배치 (일괄 처리)
@@ -126,6 +192,14 @@ export default function Timeline() {
   const totalHours = viewDays * 24;
   const hourWidth = 100 / totalHours;
 
+  // 드롭 위치에서 시간 계산
+  const getDropHour = useCallback((e: React.DragEvent, roomEl: HTMLDivElement) => {
+    const rect = roomEl.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const ratio = x / rect.width;
+    return ratio * totalHours;
+  }, [totalHours]);
+
   return (
     <div className="space-y-4">
       {/* Unassigned Queue */}
@@ -154,8 +228,8 @@ export default function Timeline() {
               <div
                 key={res.id}
                 draggable
-                onDragStart={() => setDragReservation(res.id)}
-                onDragEnd={() => setDragReservation(null)}
+                onDragStart={() => setDragInfo({ reservationId: res.id, type: 'unassigned', offsetRatio: 0 })}
+                onDragEnd={() => { setDragInfo(null); setDropPreview(null); }}
                 className={cn(
                   'flex items-center gap-2 px-3 py-2 rounded-lg border cursor-grab active:cursor-grabbing text-sm',
                   'bg-white border-orange-200 hover:border-orange-400 shadow-sm',
@@ -263,24 +337,36 @@ export default function Timeline() {
                   key={room.room_number}
                   className={cn(
                     'flex border-b hover:bg-gray-50/50 group',
-                    dragReservation && 'hover:bg-green-50/50'
+                    dragInfo && 'hover:bg-green-50/50',
+                    dropPreview?.room === room.room_number && 'bg-green-50/50'
                   )}
-                  onDragOver={(e) => { if (dragReservation) e.preventDefault(); }}
-                  onDrop={() => handleDrop(room.room_number)}
+                  onDragOver={(e) => {
+                    if (!dragInfo) return;
+                    e.preventDefault();
+                    const rowEl = timelineRowRefs.current.get(room.room_number);
+                    if (rowEl) {
+                      const hr = getDropHour(e, rowEl);
+                      setDropPreview({ room: room.room_number, hour: Math.round(hr) });
+                    }
+                  }}
+                  onDragLeave={() => setDropPreview((p) => p?.room === room.room_number ? null : p)}
+                  onDrop={(e) => handleDrop(room.room_number, e)}
                 >
                   <div
                     className={cn(
                       'w-20 min-w-[80px] flex-shrink-0 p-2 border-r bg-white flex items-center justify-center cursor-pointer hover:bg-green-50',
-                      dragReservation && 'bg-green-50 border-green-200'
+                      dragInfo && 'bg-green-50 border-green-200'
                     )}
-                    onClick={() => !dragReservation && setWalkinRoom(room.room_number)}
+                    onClick={() => !dragInfo && setWalkinRoom(room.room_number)}
                   >
                     <span className="text-sm font-semibold text-gray-700">{room.room_number}</span>
                   </div>
                   <div
+                    ref={(el) => { if (el) timelineRowRefs.current.set(room.room_number, el); }}
                     className="flex-1 relative cursor-pointer"
                     style={{ height: '48px' }}
                     onClick={(e) => {
+                      if (dragInfo) return;
                       const rect = e.currentTarget.getBoundingClientRect();
                       const x = e.clientX - rect.left;
                       const ratio = x / rect.width;
@@ -307,15 +393,24 @@ export default function Timeline() {
                       return (
                         <div
                           key={res.id}
+                          draggable
+                          onDragStart={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const offsetRatio = (e.clientX - rect.left) / rect.width;
+                            setDragInfo({ reservationId: res.id, type: 'existing', offsetRatio });
+                            e.dataTransfer.effectAllowed = 'move';
+                          }}
+                          onDragEnd={() => { setDragInfo(null); setDropPreview(null); }}
                           className={cn(
-                            'reservation-block flex items-center px-2 text-white text-xs font-medium overflow-hidden border',
+                            'reservation-block flex items-center px-2 text-white text-xs font-medium overflow-hidden border cursor-grab active:cursor-grabbing',
                             isHourly
                               ? `${getBlockColor(res)} border-dashed border-white/50`
-                              : `${getBlockColor(res)} border-transparent`
+                              : `${getBlockColor(res)} border-transparent`,
+                            dragInfo?.reservationId === res.id && 'opacity-50'
                           )}
                           style={style}
                           onClick={(e) => { e.stopPropagation(); setSelectedReservation(res); }}
-                          title={`${res.guest_name} | ${getSourceLabel(res.source)} | ${isHourly ? '대실' : '숙박'} | ${formatCurrency(res.sale_price)}`}
+                          title={`${res.guest_name} | ${getSourceLabel(res.source)} | ${isHourly ? '대실' : '숙박'} | ${formatCurrency(res.sale_price)}\n드래그하여 객실/시간 변경`}
                         >
                           <span className="truncate">
                             {isHourly && '[대] '}
