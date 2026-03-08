@@ -58,9 +58,9 @@ export default function Sidebar() {
 
       <aside
         className={cn(
-          'fixed left-0 top-0 h-full bg-gray-900 text-white transition-all duration-300 z-50',
-          'max-md:translate-x-[-100%] max-md:w-60',
-          sidebarOpen && 'max-md:translate-x-0',
+          'fixed left-0 top-0 h-full bg-gray-900 text-white z-50 w-60',
+          'transition-transform duration-300 md:transition-[width] md:duration-300',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
           sidebarOpen ? 'md:w-60' : 'md:w-16'
         )}
       >
