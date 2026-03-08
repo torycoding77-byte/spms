@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Reservation, Room, Expense, VipGuest, DailySummary, RoomStatus } from '@/types';
+import { Reservation, Room, Expense, VipGuest, DailySummary, RoomStatus, CommissionRate, ReservationSource, RoomType } from '@/types';
 import {
   fetchReservations, upsertReservations, updateReservationDb, deleteReservationDb,
   batchAssignRooms as batchAssignRoomsDb,
@@ -7,6 +7,7 @@ import {
   fetchExpenses, insertExpenseDb, deleteExpenseDb,
   fetchVipGuests, insertVipGuestDb, updateVipGuestDb,
 } from '@/lib/supabase-db';
+import { fetchCommissionRates, upsertCommissionRate } from '@/lib/supabase-db-v2';
 
 interface AppState {
   // Data
@@ -14,6 +15,7 @@ interface AppState {
   rooms: Room[];
   expenses: Expense[];
   vipGuests: VipGuest[];
+  commissionRates: CommissionRate[];
 
   // Loading
   loading: boolean;
@@ -55,6 +57,10 @@ interface AppState {
   addVipGuest: (guest: VipGuest) => Promise<void>;
   updateVipGuest: (id: string, updates: Partial<VipGuest>) => Promise<void>;
 
+  // Commission
+  saveCommissionRate: (rate: Partial<CommissionRate>) => Promise<CommissionRate>;
+  getEffectiveRate: (source: ReservationSource, roomType: RoomType) => number;
+
   // Realtime sync helpers
   _syncReservation: (reservation: Reservation) => void;
   _removeReservation: (id: string) => void;
@@ -73,6 +79,7 @@ export const useStore = create<AppState>((set, get) => ({
   rooms: [],
   expenses: [],
   vipGuests: [],
+  commissionRates: [],
   loading: true,
   error: null,
   selectedDate: new Date().toISOString().split('T')[0],
@@ -90,13 +97,14 @@ export const useStore = create<AppState>((set, get) => ({
           new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
         ]);
 
-      const [reservations, rooms, expenses, vipGuests] = await Promise.all([
+      const [reservations, rooms, expenses, vipGuests, commissionRates] = await Promise.all([
         timeout(fetchReservations(), 5000, []),
         timeout(fetchRooms(), 5000, []),
         timeout(fetchExpenses(), 5000, []),
         timeout(fetchVipGuests(), 5000, []),
+        timeout(fetchCommissionRates(), 5000, []),
       ]);
-      set({ reservations, rooms, expenses, vipGuests, loading: false });
+      set({ reservations, rooms, expenses, vipGuests, commissionRates, loading: false });
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to load data',
@@ -269,6 +277,33 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Failed to update VIP guest' });
     }
+  },
+
+  // === Commission Rates ===
+  saveCommissionRate: async (rate) => {
+    const saved = await upsertCommissionRate(rate);
+    set((state) => ({
+      commissionRates: state.commissionRates.map((r) =>
+        r.id === saved.id ? saved : r
+      ),
+    }));
+    return saved;
+  },
+
+  getEffectiveRate: (source, roomType) => {
+    const { commissionRates } = get();
+    const rate = commissionRates.find(
+      (r) => r.source === source && r.room_type === roomType && r.is_active
+    );
+    if (!rate) return 0;
+    // 프로모션 기간이면 프로모션 수수료율 적용
+    if (rate.promo_rate_percent && rate.promo_start && rate.promo_end) {
+      const now = new Date().toISOString().split('T')[0];
+      if (now >= rate.promo_start && now <= rate.promo_end) {
+        return rate.promo_rate_percent;
+      }
+    }
+    return rate.rate_percent;
   },
 
   // === Realtime sync helpers ===

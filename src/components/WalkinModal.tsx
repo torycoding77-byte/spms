@@ -12,7 +12,7 @@ interface Props {
 }
 
 export default function WalkinModal({ roomNumber, initialCheckIn, onClose }: Props) {
-  const { addReservations } = useStore();
+  const { addReservations, getEffectiveRate } = useStore();
   const baseCheckIn = initialCheckIn ? new Date(initialCheckIn) : new Date();
   const defaultCheckOut = new Date(baseCheckIn);
   defaultCheckOut.setDate(defaultCheckOut.getDate() + 1);
@@ -35,6 +35,8 @@ export default function WalkinModal({ roomNumber, initialCheckIn, onClose }: Pro
     if (!form.guest_name || !form.sale_price) return;
 
     const price = parseInt(form.sale_price);
+    const commissionRate = getEffectiveRate('walkin', 'standard');
+    const commission = Math.round(price * commissionRate / 100);
     const reservation: Reservation = {
       id: Date.now().toString(36) + Math.random().toString(36).substring(2, 9),
       external_id: `WALK-${Date.now()}`,
@@ -48,8 +50,8 @@ export default function WalkinModal({ roomNumber, initialCheckIn, onClose }: Pro
       check_in: new Date(form.check_in).toISOString(),
       check_out: new Date(form.check_out).toISOString(),
       sale_price: price,
-      settlement_price: price,
-      commission: 0,
+      settlement_price: price - commission,
+      commission,
       payment_method: form.payment_method,
       status: 'checked_in',
       memo: form.memo,

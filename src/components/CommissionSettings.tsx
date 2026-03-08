@@ -1,15 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { CommissionRate, ReservationSource, RoomType } from '@/types';
-import { fetchCommissionRates, upsertCommissionRate } from '@/lib/supabase-db-v2';
+import { useState } from 'react';
+import { CommissionRate, ReservationSource } from '@/types';
+import { useStore } from '@/store/useStore';
 import { getSourceLabel, cn } from '@/lib/utils';
-import { Save, Percent, Tag } from 'lucide-react';
+import { Save, Percent, Tag, RefreshCw } from 'lucide-react';
 import { showToast } from './Toast';
 
 export default function CommissionSettings() {
-  const [rates, setRates] = useState<CommissionRate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { commissionRates: rates, saveCommissionRate, loading, reservations, updateReservation, getEffectiveRate } = useStore();
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -18,18 +17,6 @@ export default function CommissionSettings() {
     promo_start: '',
     promo_end: '',
   });
-
-  useEffect(() => {
-    fetchCommissionRates()
-      .then((data) => {
-        setRates(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-        showToast({ type: 'error', title: '로딩 실패', message: '수수료 데이터를 불러올 수 없습니다.' });
-      });
-  }, []);
 
   const startEdit = (rate: CommissionRate) => {
     setEditingId(rate.id);
@@ -52,10 +39,9 @@ export default function CommissionSettings() {
         promo_end: editForm.promo_end || undefined,
       };
 
-      const saved = await upsertCommissionRate(updates);
-      setRates((prev) => prev.map((r) => (r.id === id ? saved : r)));
+      await saveCommissionRate(updates);
       setEditingId(null);
-      showToast({ type: 'success', title: '수수료율 저장', message: '수수료율이 업데이트되었습니다.' });
+      showToast({ type: 'success', title: '수수료율 저장', message: '수수료율이 업데이트되었습니다. 새 예약부터 적용됩니다.' });
     } catch (err) {
       showToast({
         type: 'error',
@@ -73,7 +59,7 @@ export default function CommissionSettings() {
     return now >= rate.promo_start && now <= rate.promo_end;
   };
 
-  const getEffectiveRate = (rate: CommissionRate) => {
+  const getDisplayRate = (rate: CommissionRate) => {
     return isPromoActive(rate) ? rate.promo_rate_percent! : rate.rate_percent;
   };
 
@@ -173,7 +159,7 @@ export default function CommissionSettings() {
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <p className={cn('text-lg font-bold', promo ? 'text-green-600' : 'text-gray-800')}>
-                          {getEffectiveRate(rate)}%
+                          {getDisplayRate(rate)}%
                         </p>
                         {promo && (
                           <p className="text-xs text-green-500 flex items-center gap-1">
@@ -193,6 +179,53 @@ export default function CommissionSettings() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* 일괄 재계산 */}
+      <div className="bg-white rounded-xl border p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+              <RefreshCw size={16} /> 수수료 일괄 재계산
+            </h3>
+            <p className="text-xs text-gray-400 mt-1">
+              기존 예약의 수수료를 현재 설정된 수수료율로 다시 계산합니다.
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              const otaReservations = reservations.filter(
+                (r) => r.source !== 'walkin' && r.status !== 'cancelled'
+              );
+              if (otaReservations.length === 0) {
+                showToast({ type: 'info', title: '재계산 대상 없음', message: 'OTA 예약이 없습니다.' });
+                return;
+              }
+              let count = 0;
+              for (const res of otaReservations) {
+                const ratePercent = getEffectiveRate(res.source, res.room_type);
+                if (ratePercent === 0) continue;
+                const newCommission = Math.round(res.sale_price * ratePercent / 100);
+                const newSettlement = res.sale_price - newCommission;
+                if (newCommission !== res.commission) {
+                  await updateReservation(res.id, {
+                    commission: newCommission,
+                    settlement_price: newSettlement,
+                  });
+                  count++;
+                }
+              }
+              showToast({
+                type: 'success',
+                title: '재계산 완료',
+                message: `${count}건의 예약 수수료가 업데이트되었습니다.`,
+              });
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-900"
+          >
+            <RefreshCw size={14} /> 일괄 재계산
+          </button>
         </div>
       </div>
     </div>
