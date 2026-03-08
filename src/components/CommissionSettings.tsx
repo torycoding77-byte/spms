@@ -10,6 +10,7 @@ import { showToast } from './Toast';
 export default function CommissionSettings() {
   const [rates, setRates] = useState<CommissionRate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     rate_percent: '',
@@ -19,10 +20,15 @@ export default function CommissionSettings() {
   });
 
   useEffect(() => {
-    fetchCommissionRates().then((data) => {
-      setRates(data);
-      setLoading(false);
-    });
+    fetchCommissionRates()
+      .then((data) => {
+        setRates(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+        showToast({ type: 'error', title: '로딩 실패', message: '수수료 데이터를 불러올 수 없습니다.' });
+      });
   }, []);
 
   const startEdit = (rate: CommissionRate) => {
@@ -36,18 +42,29 @@ export default function CommissionSettings() {
   };
 
   const saveEdit = async (id: string) => {
-    const updates: Partial<CommissionRate> = {
-      id,
-      rate_percent: parseFloat(editForm.rate_percent),
-      promo_rate_percent: editForm.promo_rate_percent ? parseFloat(editForm.promo_rate_percent) : undefined,
-      promo_start: editForm.promo_start || undefined,
-      promo_end: editForm.promo_end || undefined,
-    };
+    setSaving(true);
+    try {
+      const updates: Partial<CommissionRate> = {
+        id,
+        rate_percent: parseFloat(editForm.rate_percent),
+        promo_rate_percent: editForm.promo_rate_percent ? parseFloat(editForm.promo_rate_percent) : undefined,
+        promo_start: editForm.promo_start || undefined,
+        promo_end: editForm.promo_end || undefined,
+      };
 
-    const saved = await upsertCommissionRate(updates);
-    setRates((prev) => prev.map((r) => (r.id === id ? saved : r)));
-    setEditingId(null);
-    showToast({ type: 'success', title: '수수료율 저장', message: '수수료율이 업데이트되었습니다.' });
+      const saved = await upsertCommissionRate(updates);
+      setRates((prev) => prev.map((r) => (r.id === id ? saved : r)));
+      setEditingId(null);
+      showToast({ type: 'success', title: '수수료율 저장', message: '수수료율이 업데이트되었습니다.' });
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: '저장 실패',
+        message: err instanceof Error ? err.message : '수수료율 저장에 실패했습니다.',
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const isPromoActive = (rate: CommissionRate) => {
@@ -130,12 +147,13 @@ export default function CommissionSettings() {
                       </label>
                     </div>
                     <div className="flex justify-end gap-2">
-                      <button onClick={() => setEditingId(null)} className="px-3 py-1.5 text-sm text-gray-500">취소</button>
+                      <button onClick={() => setEditingId(null)} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">취소</button>
                       <button
                         onClick={() => saveEdit(rate.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-gray-800 text-white rounded-lg text-sm"
+                        disabled={saving || !editForm.rate_percent}
+                        className="flex items-center gap-1 px-4 py-2 bg-pink-600 text-white rounded-lg text-sm font-medium hover:bg-pink-700 active:bg-pink-800 disabled:opacity-50"
                       >
-                        <Save size={14} /> 저장
+                        <Save size={14} /> {saving ? '저장 중...' : '저장'}
                       </button>
                     </div>
                   </div>

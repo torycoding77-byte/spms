@@ -39,10 +39,24 @@ export default function ReservationManager() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'' | ReservationStatus>('');
   const [sourceFilter, setSourceFilter] = useState<'' | ReservationSource>('');
+  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
   const [selectedRes, setSelectedRes] = useState<Reservation | null>(null);
 
-  const filtered = useMemo(() => {
+  const dateFiltered = useMemo(() => {
+    if (!dateFilter) return reservations;
+    const target = new Date(dateFilter);
+    target.setHours(0, 0, 0, 0);
+    const nextDay = new Date(target);
+    nextDay.setDate(nextDay.getDate() + 1);
     return reservations.filter((r) => {
+      const checkIn = new Date(r.check_in);
+      const checkOut = new Date(r.check_out);
+      return checkIn < nextDay && checkOut > target;
+    });
+  }, [reservations, dateFilter]);
+
+  const filtered = useMemo(() => {
+    return dateFiltered.filter((r) => {
       if (statusFilter && r.status !== statusFilter) return false;
       if (sourceFilter && r.source !== sourceFilter) return false;
       if (searchQuery) {
@@ -56,23 +70,57 @@ export default function ReservationManager() {
       }
       return true;
     }).sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime());
-  }, [reservations, searchQuery, statusFilter, sourceFilter]);
+  }, [dateFiltered, searchQuery, statusFilter, sourceFilter]);
 
   const stats = useMemo(() => {
-    const total = reservations.length;
-    const confirmed = reservations.filter((r) => r.status === 'confirmed').length;
-    const checkedIn = reservations.filter((r) => r.status === 'checked_in').length;
-    const checkedOut = reservations.filter((r) => r.status === 'checked_out').length;
+    const total = dateFiltered.length;
+    const confirmed = dateFiltered.filter((r) => r.status === 'confirmed').length;
+    const checkedIn = dateFiltered.filter((r) => r.status === 'checked_in').length;
+    const checkedOut = dateFiltered.filter((r) => r.status === 'checked_out').length;
     return { total, confirmed, checkedIn, checkedOut };
-  }, [reservations]);
+  }, [dateFiltered]);
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">예약 관리</h1>
           <p className="text-sm text-gray-500 mt-1">예약 생성, 조회 및 상태 관리</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const d = new Date(dateFilter);
+              d.setDate(d.getDate() - 1);
+              setDateFilter(d.toISOString().split('T')[0]);
+            }}
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-500"
+          >
+            &lt;
+          </button>
+          <input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="border rounded-lg px-3 py-2 text-sm"
+          />
+          <button
+            onClick={() => {
+              const d = new Date(dateFilter);
+              d.setDate(d.getDate() + 1);
+              setDateFilter(d.toISOString().split('T')[0]);
+            }}
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-500"
+          >
+            &gt;
+          </button>
+          <button
+            onClick={() => setDateFilter(new Date().toISOString().split('T')[0])}
+            className="text-sm text-pink-600 hover:text-pink-700 font-medium ml-1"
+          >
+            오늘
+          </button>
         </div>
       </div>
 
