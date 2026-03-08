@@ -32,13 +32,21 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile hamburger */}
-      <button
+      {/* Mobile top bar */}
+      <div
         onClick={() => setSidebarOpen(true)}
-        className="fixed top-4 left-4 z-40 p-2 bg-gray-900 text-white rounded-lg md:hidden"
+        className="fixed top-0 left-0 right-0 z-40 flex items-center gap-3 px-4 py-3 bg-white/95 backdrop-blur border-b shadow-sm md:hidden cursor-pointer active:bg-gray-50"
       >
-        <Menu size={20} />
-      </button>
+        <div className="p-1.5 bg-gray-900 text-white rounded-lg">
+          <Menu size={18} />
+        </div>
+        <div>
+          <h1 className="text-sm font-bold text-gray-900">
+            {NAV_ITEMS.find((item) => item.href === pathname)?.label || 'Flamingo'}
+          </h1>
+          <p className="text-[10px] text-gray-400">메뉴 열기</p>
+        </div>
+      </div>
 
       {/* Mobile overlay */}
       {sidebarOpen && (
