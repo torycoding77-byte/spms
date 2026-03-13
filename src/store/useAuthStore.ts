@@ -6,6 +6,7 @@ import {
   insertStaffAccount,
   updateStaffAccount,
   deleteStaffAccount,
+  authenticateStaff,
   type StaffAccountRow,
 } from '@/lib/supabase-db-v2';
 
@@ -155,36 +156,43 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   accountsLoaded: false,
 
   login: async (id, password) => {
-    // DB에서 최신 계정 목록 로드 시도
-    let accounts: UserAccount[];
+    const perms = loadPermissions();
+
+    // 1) DB 직접 인증 시도
     try {
-      const rows = await fetchStaffAccounts();
-      if (rows.length > 0) {
-        accounts = rows.map(dbRowToAccount);
-        saveAccountsToStorage(accounts);
-        set({ accounts, accountsLoaded: true });
-      } else {
-        accounts = loadAccountsFromStorage();
+      const row = await authenticateStaff(id, password);
+      if (row) {
+        const account = dbRowToAccount(row);
+        const session = { loggedIn: true, adminName: account.name, role: account.role, ts: Date.now() };
+        localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+        set({
+          isLoggedIn: true,
+          adminName: account.name,
+          role: account.role,
+          permissions: perms,
+        });
+        return true;
       }
     } catch {
-      // DB 연결 실패 시 localStorage 폴백
-      accounts = loadAccountsFromStorage();
+      // DB 연결 실패 → localStorage 폴백
     }
 
-    const account = accounts.find((a) => a.id === id && a.pw === password);
-    if (account) {
-      const perms = loadPermissions();
-      const session = { loggedIn: true, adminName: account.name, role: account.role, ts: Date.now() };
+    // 2) localStorage 폴백 인증
+    const localAccounts = loadAccountsFromStorage();
+    const localAccount = localAccounts.find((a) => a.id === id && a.pw === password);
+    if (localAccount) {
+      const session = { loggedIn: true, adminName: localAccount.name, role: localAccount.role, ts: Date.now() };
       localStorage.setItem(SESSION_KEY, JSON.stringify(session));
       set({
         isLoggedIn: true,
-        adminName: account.name,
-        role: account.role,
+        adminName: localAccount.name,
+        role: localAccount.role,
         permissions: perms,
-        accounts,
+        accounts: localAccounts,
       });
       return true;
     }
+
     return false;
   },
 

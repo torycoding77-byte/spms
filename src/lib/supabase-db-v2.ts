@@ -60,6 +60,21 @@ export async function deleteStaffAccount(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function authenticateStaff(
+  loginId: string,
+  password: string
+): Promise<StaffAccountRow | null> {
+  const { data, error } = await supabase
+    .from('staff_accounts')
+    .select('*')
+    .eq('login_id', loginId)
+    .eq('password', password)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data as StaffAccountRow;
+}
+
 // ==================== Maintenance Logs ====================
 
 export async function fetchMaintenanceLogs(): Promise<MaintenanceLog[]> {
