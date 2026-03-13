@@ -7,7 +7,7 @@ import {
   formatCurrency, formatDateTime, getSourceLabel,
   getStatusLabel, getStatusColor, getSourceBgColor
 } from '@/lib/utils';
-import { X, Phone, Car, CreditCard, Edit2, Check, RotateCcw } from 'lucide-react';
+import { X, Phone, Car, CreditCard, Edit2, Check, RotateCcw, MessageSquare } from 'lucide-react';
 
 interface Props {
   reservation: Reservation;
@@ -303,9 +303,14 @@ export default function ReservationModal({ reservation: res, onClose }: Props) {
 
           <div className="flex gap-3">
             {res.guest_phone && (
-              <a href={`tel:${res.guest_phone}`} className="flex items-center gap-1 text-sm text-blue-600 hover:underline">
-                <Phone size={14} /> {res.guest_phone}
-              </a>
+              <>
+                <a href={`tel:${res.guest_phone}`} className="flex items-center gap-1 text-sm text-blue-600 hover:underline">
+                  <Phone size={14} /> {res.guest_phone}
+                </a>
+                <a href={`sms:${res.guest_phone}`} className="flex items-center gap-1 text-sm text-green-600 hover:underline">
+                  <MessageSquare size={14} /> 문자
+                </a>
+              </>
             )}
             {res.guest_vehicle && (
               <span className="flex items-center gap-1 text-sm text-gray-600">
