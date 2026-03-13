@@ -106,6 +106,14 @@ export interface Toast {
   message: string;
 }
 
+export interface HousekeepingLog {
+  id: string;
+  room_number: string;
+  cleaner_name: string;
+  cleaned_at: string; // ISO datetime
+  created_at: string;
+}
+
 export interface DailySummary {
   date: string;
   total_sales: number;

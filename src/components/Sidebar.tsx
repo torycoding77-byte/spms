@@ -6,29 +6,38 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, CalendarDays, Upload, BedDouble,
   Receipt, Users, ChevronLeft, ChevronRight, Wrench,
-  BarChart3, Settings, Menu, X, Calculator, ClipboardList, LogOut
+  BarChart3, Settings, Menu, X, Calculator, ClipboardList, LogOut, SprayCan
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useAuthStore, MENU_KEY_TO_HREF, MENU_LABELS } from '@/store/useAuthStore';
+import type { MenuKey } from '@/store/useAuthStore';
 
-const NAV_ITEMS = [
-  { href: '/', label: '대시보드', icon: LayoutDashboard },
-  { href: '/reservations', label: '예약 관리', icon: ClipboardList },
-  { href: '/timeline', label: '예약 타임라인', icon: CalendarDays },
-  { href: '/upload', label: '엑셀 업로드', icon: Upload },
-  { href: '/rooms', label: '객실 관리', icon: BedDouble },
-  { href: '/maintenance', label: '유지보수', icon: Wrench },
-  { href: '/expenses', label: '지출 관리', icon: Receipt },
-  { href: '/crm', label: '고객 관리', icon: Users },
-  { href: '/settlement', label: '정산 보고서', icon: Calculator },
-  { href: '/reports', label: '월간 리포트', icon: BarChart3 },
-  { href: '/settings', label: '설정', icon: Settings },
-];
+const MENU_ICONS: Record<MenuKey, typeof LayoutDashboard> = {
+  dashboard: LayoutDashboard,
+  reservations: ClipboardList,
+  timeline: CalendarDays,
+  upload: Upload,
+  rooms: BedDouble,
+  housekeeping: SprayCan,
+  maintenance: Wrench,
+  expenses: Receipt,
+  crm: Users,
+  settlement: Calculator,
+  reports: BarChart3,
+  settings: Settings,
+};
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { sidebarOpen, setSidebarOpen } = useStore();
-  const { logout, adminName } = useAuthStore();
+  const { logout, adminName, getAccessibleMenus } = useAuthStore();
+
+  const accessibleMenus = getAccessibleMenus();
+  const navItems = accessibleMenus.map((key) => ({
+    href: MENU_KEY_TO_HREF[key],
+    label: MENU_LABELS[key],
+    icon: MENU_ICONS[key],
+  }));
 
   return (
     <>
@@ -42,7 +51,7 @@ export default function Sidebar() {
         </div>
         <div>
           <h1 className="text-sm font-bold text-gray-900">
-            {NAV_ITEMS.find((item) => item.href === pathname)?.label || 'Flamingo'}
+            {navItems.find((item) => item.href === pathname)?.label || 'Flamingo'}
           </h1>
           <p className="text-[10px] text-gray-400">메뉴 열기</p>
         </div>
@@ -81,7 +90,7 @@ export default function Sidebar() {
         </div>
 
         <nav className="mt-4 flex flex-col gap-1 px-2 overflow-y-auto flex-1" style={{ maxHeight: 'calc(100vh - 160px)' }}>
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
             return (

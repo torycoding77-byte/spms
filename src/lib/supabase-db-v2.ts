@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { MaintenanceLog, CommissionRate, DailyClosing } from '@/types';
+import { MaintenanceLog, CommissionRate, DailyClosing, HousekeepingLog } from '@/types';
 
 // ==================== Maintenance Logs ====================
 
@@ -96,4 +96,95 @@ export async function upsertDailyClosing(
 
   if (error) throw error;
   return data as unknown as DailyClosing;
+}
+
+// ==================== Housekeeping Logs ====================
+
+const HK_STORAGE_KEY = 'flamingo_housekeeping_logs';
+
+function loadHkFromStorage(): HousekeepingLog[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(HK_STORAGE_KEY);
+    if (!raw || raw.trim() === '') return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    // 파싱 실패시 초기화
+    localStorage.removeItem(HK_STORAGE_KEY);
+    return [];
+  }
+}
+
+function saveHkToStorage(logs: HousekeepingLog[]) {
+  try {
+    localStorage.setItem(HK_STORAGE_KEY, JSON.stringify(logs));
+  } catch { /* storage full etc */ }
+}
+
+export async function fetchHousekeepingLogs(
+  startDate?: string,
+  endDate?: string
+): Promise<HousekeepingLog[]> {
+  // Supabase 먼저 시도
+  try {
+    let query = supabase
+      .from('housekeeping_logs')
+      .select('*')
+      .order('cleaned_at', { ascending: false });
+
+    if (startDate) query = query.gte('cleaned_at', startDate + 'T00:00:00');
+    if (endDate) query = query.lte('cleaned_at', endDate + 'T23:59:59');
+
+    const { data, error } = await query;
+    if (!error && data) return data as unknown as HousekeepingLog[];
+  } catch { /* fallback */ }
+
+  // localStorage 폴백
+  let logs = loadHkFromStorage();
+  if (startDate) logs = logs.filter((l) => l.cleaned_at >= startDate + 'T00:00:00');
+  if (endDate) logs = logs.filter((l) => l.cleaned_at <= endDate + 'T23:59:59');
+  return logs.sort((a, b) => b.cleaned_at.localeCompare(a.cleaned_at));
+}
+
+export async function insertHousekeepingLog(
+  log: Omit<HousekeepingLog, 'id' | 'created_at'>
+): Promise<HousekeepingLog> {
+  // Supabase 먼저 시도
+  try {
+    const { data, error } = await supabase
+      .from('housekeeping_logs')
+      .insert(log)
+      .select()
+      .single();
+
+    if (!error && data) return data as unknown as HousekeepingLog;
+  } catch { /* fallback */ }
+
+  // localStorage 폴백
+  const newLog: HousekeepingLog = {
+    ...log,
+    id: crypto.randomUUID(),
+    created_at: new Date().toISOString(),
+  };
+  const logs = loadHkFromStorage();
+  logs.push(newLog);
+  saveHkToStorage(logs);
+  return newLog;
+}
+
+export async function deleteHousekeepingLog(id: string): Promise<void> {
+  // Supabase 먼저 시도
+  try {
+    const { error } = await supabase
+      .from('housekeeping_logs')
+      .delete()
+      .eq('id', id);
+
+    if (!error) return;
+  } catch { /* fallback */ }
+
+  // localStorage 폴백
+  const logs = loadHkFromStorage().filter((l) => l.id !== id);
+  saveHkToStorage(logs);
 }
