@@ -112,12 +112,13 @@ export default function RoomManager() {
   return (
     <>
       {groupedRooms.map((group) => (
-        <div key={group.value} className="mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <span className={cn('text-xs px-2 py-1 rounded font-bold', ROOM_TYPE_COLORS[group.value])}>
-              {group.label}
+        <div key={group.value} className="mb-8">
+          <div className="flex items-center gap-3 mb-4 pb-2 border-b border-gray-200">
+            <div className={cn('w-1 h-6 rounded-full', group.value === 'standard' ? 'bg-blue-500' : group.value === 'deluxe' ? 'bg-yellow-500' : 'bg-blue-400')} />
+            <h2 className="text-base font-bold text-gray-800">객실 타입: {group.label}</h2>
+            <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', ROOM_TYPE_COLORS[group.value])}>
+              {group.rooms.length}실
             </span>
-            <span className="text-xs text-gray-400">{group.rooms.length}실</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
         {group.rooms.map((room) => {
@@ -248,12 +249,13 @@ export default function RoomManager() {
 
       {/* ── 판매중지 객실 ── */}
       {blockedRooms.length > 0 && (
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xs px-2 py-1 rounded font-bold bg-red-100 text-red-700">
-              <Ban size={12} className="inline mr-1" />판매중지
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-4 pb-2 border-b border-red-200">
+            <div className="w-1 h-6 rounded-full bg-red-500" />
+            <h2 className="text-base font-bold text-gray-800">판매중지</h2>
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">
+              {blockedRooms.length}실
             </span>
-            <span className="text-xs text-gray-400">{blockedRooms.length}실</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
             {blockedRooms.map((room) => {
