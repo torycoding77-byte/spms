@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { HousekeepingLog } from '@/types';
 import { cn } from '@/lib/utils';
 import { SprayCan, X, Trash2, Clock, Check } from 'lucide-react';
-import { fetchHousekeepingLogs, insertHousekeepingLog, deleteHousekeepingLog, updateRoomStatusAfterCleaning } from '@/lib/supabase-db-v2';
+import { fetchHousekeepingLogs, deleteHousekeepingLog } from '@/lib/supabase-db-v2';
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
@@ -17,7 +17,7 @@ function formatNow() {
 }
 
 export default function HousekeepingCleaner() {
-  const { rooms, updateRoomStatus } = useStore();
+  const { rooms } = useStore();
   const { adminName } = useAuthStore();
   const [todayLogs, setTodayLogs] = useState<HousekeepingLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,28 +70,52 @@ export default function HousekeepingCleaner() {
     setConfirmRoom(roomNumber);
   };
 
-  // 확인 → 저장 + 객실 상태를 판매가능으로 변경
+  // 확인 → 서버 API로 청소완료 처리 (청소기록 + 객실상태 동시 변경)
   const handleConfirmClean = async () => {
     if (!confirmRoom || saving) return;
     const targetRoom = confirmRoom;
     setSaving(targetRoom);
     try {
-      // 1. 청소 기록 저장
-      const log = await insertHousekeepingLog({
-        room_number: targetRoom,
-        cleaner_name: adminName,
-        cleaned_at: new Date().toISOString(),
+      const res = await fetch('/api/housekeeping/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room_number: targetRoom,
+          cleaner_name: adminName,
+        }),
       });
-      setTodayLogs((prev) => [log, ...prev]);
+      const result = await res.json();
 
-      // 2. 객실 상태를 '판매가능'으로 DB 직접 업데이트
-      const dbOk = await updateRoomStatusAfterCleaning(targetRoom);
-      console.log(`[HK] Room ${targetRoom} DB update: ${dbOk ? '성공' : '실패'}`);
+      if (!res.ok) {
+        console.error(`[HK] API error:`, result);
+        alert(`청소 완료 실패: ${result.error || '서버 오류'}`);
+        return;
+      }
 
-      // 3. store 로컬 상태도 동기화
-      updateRoomStatus(targetRoom, 'available');
+      // 청소 기록 UI 반영
+      if (result.log) {
+        setTodayLogs((prev) => [result.log, ...prev]);
+      }
+
+      // 객실 상태 확인
+      if (result.room_updated) {
+        console.log(`[HK] Room ${targetRoom} → available 성공`);
+      } else {
+        console.warn(`[HK] Room ${targetRoom} 상태 변경 실패:`, result.room_error);
+        alert(`청소 기록은 저장됐지만 객실 상태 변경 실패: ${result.room_error}`);
+      }
+
+      // store 로컬 상태만 동기화 (DB는 이미 API에서 처리됨)
+      useStore.setState((state) => ({
+        rooms: state.rooms.map((r) =>
+          r.room_number === targetRoom
+            ? { ...r, status: 'available' as const, last_cleaned: new Date().toISOString() }
+            : r
+        ),
+      }));
     } catch (err) {
       console.error(`[HK] handleConfirmClean 실패:`, err);
+      alert('네트워크 오류가 발생했습니다.');
     } finally {
       setSaving(null);
       setConfirmRoom(null);
