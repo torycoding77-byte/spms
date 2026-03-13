@@ -48,6 +48,7 @@ interface AppState {
   // Room Management
   updateRoomStatus: (roomNumber: string, status: RoomStatus) => Promise<void>;
   updateRoomNotes: (roomNumber: string, notes: string) => Promise<void>;
+  updateRoom: (roomNumber: string, updates: Partial<Room>) => Promise<void>;
 
   // Expenses
   addExpense: (expense: Expense) => Promise<void>;
@@ -235,6 +236,19 @@ export const useStore = create<AppState>((set, get) => ({
       await updateRoomDb(roomNumber, { notes });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Failed to update room notes' });
+    }
+  },
+
+  updateRoom: async (roomNumber, updates) => {
+    set((state) => ({
+      rooms: state.rooms.map((r) =>
+        r.room_number === roomNumber ? { ...r, ...updates } : r
+      ),
+    }));
+    try {
+      await updateRoomDb(roomNumber, updates);
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : 'Failed to update room' });
     }
   },
 

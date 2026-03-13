@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useStore } from '@/store/useStore';
-import { RoomStatus } from '@/types';
+import { Room, RoomStatus, RoomType } from '@/types';
 import { getStatusLabel, getStatusColor, cn } from '@/lib/utils';
-import { CheckCircle, Wrench, Ban, Sparkles, Edit2, Save, SprayCan } from 'lucide-react';
+import { CheckCircle, Wrench, Ban, Sparkles, Edit2, Save, SprayCan, Settings, X } from 'lucide-react';
 
 const STATUS_OPTIONS: { value: RoomStatus; label: string; icon: React.ReactNode; color: string }[] = [
   { value: 'available', label: '판매가능', icon: <CheckCircle size={14} />, color: 'bg-green-500' },
@@ -13,13 +13,24 @@ const STATUS_OPTIONS: { value: RoomStatus; label: string; icon: React.ReactNode;
   { value: 'blocked', label: '판매중지', icon: <Ban size={14} />, color: 'bg-red-500' },
 ];
 
+const ROOM_TYPE_OPTIONS: { value: RoomType; label: string }[] = [
+  { value: 'standard', label: '스탠다드' },
+  { value: 'deluxe', label: '디럭스' },
+  { value: 'suite', label: '스위트' },
+  { value: 'family', label: '패밀리' },
+];
+
 export default function RoomManager() {
-  const { rooms, updateRoomStatus, updateRoomNotes, getReservationsForRoom, selectedDate } = useStore();
+  const { rooms, updateRoomStatus, updateRoomNotes, updateRoom, getReservationsForRoom, selectedDate } = useStore();
   const [editingRoom, setEditingRoom] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [requestingRoom, setRequestingRoom] = useState<string | null>(null);
   const [requestMsg, setRequestMsg] = useState('');
   const [sendingRequest, setSendingRequest] = useState(false);
+  // 객실 수정 모달
+  const [editModal, setEditModal] = useState<Room | null>(null);
+  const [editForm, setEditForm] = useState({ room_type: '' as RoomType, floor: 0, notes: '', is_active: true });
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const startEdit = (roomNumber: string, currentNotes: string) => {
     setEditingRoom(roomNumber);
@@ -29,6 +40,29 @@ export default function RoomManager() {
   const saveNote = (roomNumber: string) => {
     updateRoomNotes(roomNumber, noteText);
     setEditingRoom(null);
+  };
+
+  const openEditModal = (room: Room) => {
+    setEditModal(room);
+    setEditForm({
+      room_type: room.room_type,
+      floor: room.floor,
+      notes: room.notes,
+      is_active: room.is_active,
+    });
+  };
+
+  const saveRoomEdit = async () => {
+    if (!editModal || savingEdit) return;
+    setSavingEdit(true);
+    try {
+      await updateRoom(editModal.room_number, editForm);
+      setEditModal(null);
+    } catch {
+      alert('객실 수정에 실패했습니다.');
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   const openCleaningRequest = (roomNumber: string) => {
@@ -83,7 +117,16 @@ export default function RoomManager() {
               )}
             >
               <div className="flex justify-between items-start mb-3">
-                <h3 className="text-2xl font-bold text-gray-800">{room.room_number}</h3>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="text-2xl font-bold text-gray-800">{room.room_number}</h3>
+                  <button
+                    onClick={() => openEditModal(room)}
+                    className="p-1 text-gray-300 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                    title="객실 수정"
+                  >
+                    <Settings size={14} />
+                  </button>
+                </div>
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(effectiveStatus)}`}>
                   {getStatusLabel(effectiveStatus)}
                 </span>
@@ -176,6 +219,111 @@ export default function RoomManager() {
           );
         })}
       </div>
+
+      {/* ── 객실 수정 모달 ── */}
+      {editModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4" onClick={() => setEditModal(null)}>
+          <div
+            className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-bold text-gray-800">{editModal.room_number}호 객실 수정</h3>
+              <button onClick={() => setEditModal(null)} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <X size={18} className="text-gray-400" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* 객실 타입 */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">객실 타입</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {ROOM_TYPE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setEditForm((f) => ({ ...f, room_type: opt.value }))}
+                      className={cn(
+                        'py-2 rounded-lg text-sm font-medium border transition-colors',
+                        editForm.room_type === opt.value
+                          ? 'bg-blue-500 text-white border-blue-500'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 층수 */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">층수</label>
+                <input
+                  type="number"
+                  value={editForm.floor}
+                  onChange={(e) => setEditForm((f) => ({ ...f, floor: parseInt(e.target.value) || 0 }))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  min={1}
+                />
+              </div>
+
+              {/* 특이사항 */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">특이사항</label>
+                <textarea
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  rows={2}
+                  placeholder="특이사항 입력"
+                />
+              </div>
+
+              {/* 활성 상태 */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">객실 활성화</label>
+                  <p className="text-xs text-gray-400">비활성 시 모든 화면에서 숨겨집니다</p>
+                </div>
+                <button
+                  onClick={() => setEditForm((f) => ({ ...f, is_active: !f.is_active }))}
+                  className={cn(
+                    'relative w-11 h-6 rounded-full transition-colors',
+                    editForm.is_active ? 'bg-blue-500' : 'bg-gray-300'
+                  )}
+                >
+                  <div
+                    className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
+                    style={{ transform: editForm.is_active ? 'translateX(22px)' : 'translateX(2px)' }}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex border-t">
+              <button
+                disabled={savingEdit}
+                onClick={saveRoomEdit}
+                className="flex-1 py-3.5 text-sm font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors disabled:opacity-50"
+              >
+                {savingEdit ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    저장 중...
+                  </div>
+                ) : '저장'}
+              </button>
+              <button
+                onClick={() => setEditModal(null)}
+                className="flex-1 py-3.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 청소 요청 팝업 ── */}
       {requestingRoom && (
