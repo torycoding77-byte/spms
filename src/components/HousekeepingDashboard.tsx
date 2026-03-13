@@ -491,7 +491,7 @@ export default function HousekeepingDashboard() {
                           <button
                             onClick={() => handleDeleteLog(log.id)}
                             disabled={deletingId === log.id}
-                            className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                            className="p-1.5 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                             title="삭제"
                           >
                             {deletingId === log.id ? (
