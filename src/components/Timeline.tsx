@@ -3,7 +3,7 @@
 import { useMemo, useState, useRef, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { Reservation } from '@/types';
-import { cn, getSourceColor, getSourceLabel, formatCurrency, formatTime, getDaysInRange } from '@/lib/utils';
+import { cn, getSourceColor, getSourceLabel, getStatusLabel, formatCurrency, formatTime, getDaysInRange } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, AlertCircle, GripVertical, Wand2 } from 'lucide-react';
 import ReservationModal from './ReservationModal';
 import WalkinModal from './WalkinModal';
@@ -354,12 +354,22 @@ export default function Timeline() {
                 >
                   <div
                     className={cn(
-                      'w-20 min-w-[80px] flex-shrink-0 p-2 border-r bg-white flex items-center justify-center cursor-pointer hover:bg-green-50',
+                      'w-20 min-w-[80px] flex-shrink-0 py-1 px-2 border-r bg-white flex flex-col items-center justify-center cursor-pointer hover:bg-green-50',
                       dragInfo && 'bg-green-50 border-green-200'
                     )}
                     onClick={() => !dragInfo && setWalkinRoom(room.room_number)}
                   >
                     <span className="text-sm font-semibold text-gray-700">{room.room_number}</span>
+                    <span className={cn(
+                      'text-[9px] px-1.5 py-0.5 rounded-full font-medium leading-none mt-0.5',
+                      room.status === 'available' && 'bg-green-100 text-green-600',
+                      room.status === 'cleaning' && 'bg-yellow-100 text-yellow-600',
+                      room.status === 'maintenance' && 'bg-orange-100 text-orange-600',
+                      room.status === 'blocked' && 'bg-red-100 text-red-600',
+                      room.status === 'occupied' && 'bg-blue-100 text-blue-600',
+                    )}>
+                      {getStatusLabel(room.status)}
+                    </span>
                   </div>
                   <div
                     ref={(el) => { if (el) timelineRowRefs.current.set(room.room_number, el); }}
