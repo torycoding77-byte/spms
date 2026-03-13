@@ -101,10 +101,24 @@ export default function RoomManager() {
     }
   };
 
+  const activeRooms = rooms.filter((r) => r.is_active);
+  const groupedRooms = ROOM_TYPE_OPTIONS.map((opt) => ({
+    ...opt,
+    rooms: activeRooms.filter((r) => r.room_type === opt.value),
+  })).filter((g) => g.rooms.length > 0);
+
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-        {rooms.filter((r) => r.is_active).map((room) => {
+      {groupedRooms.map((group) => (
+        <div key={group.value} className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className={cn('text-xs px-2 py-1 rounded font-bold', ROOM_TYPE_COLORS[group.value])}>
+              {group.label}
+            </span>
+            <span className="text-xs text-gray-400">{group.rooms.length}실</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+        {group.rooms.map((room) => {
           const reservations = getReservationsForRoom(room.room_number, selectedDate);
           const isOccupied = reservations.some((r) => r.status === 'checked_in');
           const effectiveStatus = isOccupied ? 'occupied' : room.status;
@@ -226,7 +240,9 @@ export default function RoomManager() {
             </div>
           );
         })}
-      </div>
+          </div>
+        </div>
+      ))}
 
       {/* ── 객실 수정 모달 ── */}
       {editModal && (
