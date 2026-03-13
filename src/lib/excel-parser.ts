@@ -10,8 +10,7 @@ function generateId(): string {
 const ROOM_TYPE_MAP: [RegExp, RoomType][] = [
   [/스위트|suite|vip/i, 'suite'],
   [/디럭스|deluxe|특실/i, 'deluxe'],
-  [/패밀리|family|가족/i, 'family'],
-  [/일반|스탠다드|standard|비데|리모컨/i, 'standard'],
+  [/일반|스탠다드|standard|패밀리|family|가족|비데|리모컨/i, 'standard'],
 ];
 
 function normalizeRoomType(raw: string): RoomType {
