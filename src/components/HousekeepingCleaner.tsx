@@ -88,8 +88,6 @@ export default function HousekeepingCleaner() {
         body: JSON.stringify({ id: req.id, status: 'accepted' }),
       });
       setRequests((prev) => prev.filter((r) => r.id !== req.id));
-      // 바로 청소 완료 확인 팝업 열기
-      setConfirmRoom(req.room_number);
     } catch { /* ignore */ }
   };
 
