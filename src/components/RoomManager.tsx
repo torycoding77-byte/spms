@@ -102,9 +102,11 @@ export default function RoomManager() {
   };
 
   const activeRooms = rooms.filter((r) => r.is_active);
+  const blockedRooms = activeRooms.filter((r) => r.status === 'blocked');
+  const normalRooms = activeRooms.filter((r) => r.status !== 'blocked');
   const groupedRooms = ROOM_TYPE_OPTIONS.map((opt) => ({
     ...opt,
-    rooms: activeRooms.filter((r) => r.room_type === opt.value),
+    rooms: normalRooms.filter((r) => r.room_type === opt.value),
   })).filter((g) => g.rooms.length > 0);
 
   return (
@@ -243,6 +245,72 @@ export default function RoomManager() {
           </div>
         </div>
       ))}
+
+      {/* ── 판매중지 객실 ── */}
+      {blockedRooms.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xs px-2 py-1 rounded font-bold bg-red-100 text-red-700">
+              <Ban size={12} className="inline mr-1" />판매중지
+            </span>
+            <span className="text-xs text-gray-400">{blockedRooms.length}실</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+            {blockedRooms.map((room) => {
+              const reservations = getReservationsForRoom(room.room_number, selectedDate);
+              const isOccupied = reservations.some((r) => r.status === 'checked_in');
+              const effectiveStatus = isOccupied ? 'occupied' : room.status;
+
+              return (
+                <div
+                  key={room.room_number}
+                  className="bg-white rounded-xl border-2 border-red-300 bg-red-50 p-4 transition-all opacity-60"
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="text-2xl font-bold text-gray-800">{room.room_number}</h3>
+                      <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', ROOM_TYPE_COLORS[room.room_type])}>
+                        {ROOM_TYPE_OPTIONS.find((o) => o.value === room.room_type)?.label || room.room_type}
+                      </span>
+                      <button
+                        onClick={() => openEditModal(room)}
+                        className="p-1 text-gray-300 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                        title="객실 수정"
+                      >
+                        <Settings size={14} />
+                      </button>
+                    </div>
+                    <span className="text-xs px-2 py-1 rounded-full font-medium bg-red-100 text-red-600">
+                      판매중지
+                    </span>
+                  </div>
+
+                  {room.notes && (
+                    <p className="text-xs text-gray-500 mb-3">{room.notes}</p>
+                  )}
+
+                  <div className="flex gap-1">
+                    {STATUS_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => updateRoomStatus(room.room_number, opt.value)}
+                        className={cn(
+                          'flex-1 flex items-center justify-center gap-0.5 py-1.5 rounded-lg text-xs text-white transition-opacity',
+                          opt.color,
+                          room.status === opt.value ? 'opacity-100 ring-2 ring-offset-1 ring-gray-300' : 'opacity-40 hover:opacity-70'
+                        )}
+                        title={opt.label}
+                      >
+                        {opt.icon}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── 객실 수정 모달 ── */}
       {editModal && (
