@@ -297,7 +297,7 @@ export default function HousekeepingDashboard() {
                 <div className="min-w-[700px]">
                   {/* 시간 헤더 (6시~24시) */}
                   <div className="flex">
-                    <div className="w-16 shrink-0" />
+                    <div className="w-16 shrink-0 sticky left-0 z-10 bg-white" />
                     <div className="flex-1 flex">
                       {TIMELINE_HOURS.map((h) => (
                         <div key={h} className="flex-1 text-center text-[10px] text-gray-400 font-medium border-l border-gray-100">
@@ -313,7 +313,7 @@ export default function HousekeepingDashboard() {
                       <div key={r.room_number} className="flex items-center group hover:bg-gray-50/50">
                         {/* 객실 번호 */}
                         <div className={cn(
-                          'w-16 shrink-0 py-2 pr-2 text-right text-xs font-bold',
+                          'w-16 shrink-0 py-2 pr-2 text-right text-xs font-bold sticky left-0 z-10 bg-white group-hover:bg-gray-50/50',
                           r.cleaned ? 'text-gray-800' : 'text-gray-300'
                         )}>
                           {r.room_number}
