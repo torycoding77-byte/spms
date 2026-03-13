@@ -1,10 +1,18 @@
 'use client';
 
 import { create } from 'zustand';
+import {
+  fetchStaffAccounts,
+  insertStaffAccount,
+  updateStaffAccount,
+  deleteStaffAccount,
+  type StaffAccountRow,
+} from '@/lib/supabase-db-v2';
 
 export type UserRole = 'admin' | 'housekeeper' | 'frontdesk';
 
 export interface UserAccount {
+  dbId?: string; // Supabase row id
   id: string;
   pw: string;
   name: string;
@@ -86,7 +94,7 @@ function savePermissions(p: RolePermissions) {
   localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(p));
 }
 
-function loadAccounts(): UserAccount[] {
+function loadAccountsFromStorage(): UserAccount[] {
   try {
     const raw = localStorage.getItem(ACCOUNTS_KEY);
     if (raw) return JSON.parse(raw);
@@ -98,14 +106,25 @@ function saveAccountsToStorage(accounts: UserAccount[]) {
   localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
 }
 
+function dbRowToAccount(row: StaffAccountRow): UserAccount {
+  return {
+    dbId: row.id,
+    id: row.login_id,
+    pw: row.password,
+    name: row.name,
+    role: row.role as UserRole,
+  };
+}
+
 interface AuthState {
   isLoggedIn: boolean;
   adminName: string;
   role: UserRole;
   permissions: RolePermissions;
   accounts: UserAccount[];
+  accountsLoaded: boolean;
 
-  login: (id: string, password: string) => boolean;
+  login: (id: string, password: string) => Promise<boolean>;
   logout: () => void;
   checkSession: () => void;
 
@@ -115,7 +134,13 @@ interface AuthState {
   getAccessibleMenus: () => MenuKey[];
   getDefaultRoute: () => string;
 
-  // 계정 관리
+  // 계정 관리 (DB 연동)
+  loadAccountsFromDb: () => Promise<void>;
+  addAccountToDb: (account: UserAccount) => Promise<boolean>;
+  updateAccountInDb: (account: UserAccount) => Promise<boolean>;
+  removeAccountFromDb: (account: UserAccount) => Promise<boolean>;
+
+  // localStorage 폴백 (기존 호환)
   updateAccount: (idx: number, account: UserAccount) => void;
   addAccount: (account: UserAccount) => void;
   removeAccount: (idx: number) => void;
@@ -127,9 +152,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   role: 'admin',
   permissions: DEFAULT_PERMISSIONS,
   accounts: DEFAULT_ACCOUNTS,
+  accountsLoaded: false,
 
-  login: (id, password) => {
-    const accounts = loadAccounts();
+  login: async (id, password) => {
+    // DB에서 최신 계정 목록 로드 시도
+    let accounts: UserAccount[];
+    try {
+      const rows = await fetchStaffAccounts();
+      if (rows.length > 0) {
+        accounts = rows.map(dbRowToAccount);
+        saveAccountsToStorage(accounts);
+        set({ accounts, accountsLoaded: true });
+      } else {
+        accounts = loadAccountsFromStorage();
+      }
+    } catch {
+      // DB 연결 실패 시 localStorage 폴백
+      accounts = loadAccountsFromStorage();
+    }
+
     const account = accounts.find((a) => a.id === id && a.pw === password);
     if (account) {
       const perms = loadPermissions();
@@ -159,7 +200,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const session = JSON.parse(raw);
         if (session.loggedIn) {
           const perms = loadPermissions();
-          const accounts = loadAccounts();
+          const accounts = loadAccountsFromStorage();
           set({
             isLoggedIn: true,
             adminName: session.adminName || '관리자',
@@ -174,8 +215,98 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  // DB에서 계정 로드
+  loadAccountsFromDb: async () => {
+    try {
+      const rows = await fetchStaffAccounts();
+      if (rows.length > 0) {
+        const accounts = rows.map(dbRowToAccount);
+        saveAccountsToStorage(accounts);
+        set({ accounts, accountsLoaded: true });
+        return;
+      }
+    } catch {
+      // DB 연결 실패 → localStorage 폴백
+    }
+    const accounts = loadAccountsFromStorage();
+    set({ accounts, accountsLoaded: true });
+  },
+
+  // DB에 계정 추가
+  addAccountToDb: async (account) => {
+    try {
+      const row = await insertStaffAccount({
+        login_id: account.id,
+        password: account.pw,
+        name: account.name,
+        role: account.role,
+      });
+      const newAccount = dbRowToAccount(row);
+      set((state) => {
+        const updated = [...state.accounts, newAccount];
+        saveAccountsToStorage(updated);
+        return { accounts: updated };
+      });
+      return true;
+    } catch {
+      // DB 실패 시 localStorage 폴백
+      get().addAccount(account);
+      return false;
+    }
+  },
+
+  // DB에서 계정 수정
+  updateAccountInDb: async (account) => {
+    if (!account.dbId) {
+      // dbId가 없으면 localStorage에서 찾아서 업데이트
+      const idx = get().accounts.findIndex((a) => a.id === account.id);
+      if (idx >= 0) get().updateAccount(idx, account);
+      return false;
+    }
+    try {
+      const row = await updateStaffAccount(account.dbId, {
+        login_id: account.id,
+        password: account.pw,
+        name: account.name,
+        role: account.role,
+      });
+      const updated = dbRowToAccount(row);
+      set((state) => {
+        const list = state.accounts.map((a) => a.dbId === account.dbId ? updated : a);
+        saveAccountsToStorage(list);
+        return { accounts: list };
+      });
+      return true;
+    } catch {
+      const idx = get().accounts.findIndex((a) => a.dbId === account.dbId);
+      if (idx >= 0) get().updateAccount(idx, account);
+      return false;
+    }
+  },
+
+  // DB에서 계정 삭제
+  removeAccountFromDb: async (account) => {
+    if (!account.dbId) {
+      const idx = get().accounts.findIndex((a) => a.id === account.id);
+      if (idx >= 0) get().removeAccount(idx);
+      return false;
+    }
+    try {
+      await deleteStaffAccount(account.dbId);
+      set((state) => {
+        const list = state.accounts.filter((a) => a.dbId !== account.dbId);
+        saveAccountsToStorage(list);
+        return { accounts: list };
+      });
+      return true;
+    } catch {
+      const idx = get().accounts.findIndex((a) => a.dbId === account.dbId);
+      if (idx >= 0) get().removeAccount(idx);
+      return false;
+    }
+  },
+
   updatePermissions: (role, menus) => {
-    // admin의 settings 권한은 제거 불가 (잠금 방지)
     const finalMenus = role === 'admin'
       ? Array.from(new Set([...menus, 'settings' as MenuKey]))
       : menus;
@@ -203,6 +334,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return MENU_KEY_TO_HREF[menus[0]];
   },
 
+  // localStorage 폴백 (기존 호환)
   updateAccount: (idx, account) => {
     set((state) => {
       const updated = [...state.accounts];

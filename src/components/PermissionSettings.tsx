@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   useAuthStore,
   ALL_MENU_KEYS,
@@ -11,7 +11,7 @@ import {
   type UserAccount,
 } from '@/store/useAuthStore';
 import { cn } from '@/lib/utils';
-import { Shield, Check, Lock, UserPlus, Trash2, Eye, EyeOff, Save, Users, Key } from 'lucide-react';
+import { Shield, Check, Lock, UserPlus, Trash2, Eye, EyeOff, Save, Users, Key, Loader2 } from 'lucide-react';
 import { showToast } from './Toast';
 
 type SettingsTab = 'permissions' | 'accounts';
@@ -19,10 +19,17 @@ type SettingsTab = 'permissions' | 'accounts';
 export default function PermissionSettings() {
   const {
     permissions, updatePermissions,
-    accounts, updateAccount, addAccount, removeAccount,
+    accounts, loadAccountsFromDb, accountsLoaded,
+    addAccountToDb, updateAccountInDb, removeAccountFromDb,
     role: currentRole,
   } = useAuthStore();
   const [activeTab, setActiveTab] = useState<SettingsTab>('permissions');
+
+  useEffect(() => {
+    if (!accountsLoaded) {
+      loadAccountsFromDb();
+    }
+  }, [accountsLoaded, loadAccountsFromDb]);
 
   if (currentRole !== 'admin') return null;
 
@@ -54,9 +61,9 @@ export default function PermissionSettings() {
       {activeTab === 'accounts' && (
         <AccountsPanel
           accounts={accounts}
-          updateAccount={updateAccount}
-          addAccount={addAccount}
-          removeAccount={removeAccount}
+          addAccountToDb={addAccountToDb}
+          updateAccountInDb={updateAccountInDb}
+          removeAccountFromDb={removeAccountFromDb}
         />
       )}
     </div>
@@ -74,7 +81,6 @@ function PermissionsPanel({
   const roles: UserRole[] = ['admin', 'housekeeper', 'frontdesk'];
 
   const toggle = (role: UserRole, menu: MenuKey) => {
-    // admin의 settings는 토글 불가
     if (role === 'admin' && menu === 'settings') return;
 
     const current = permissions[role] || [];
@@ -88,7 +94,6 @@ function PermissionsPanel({
     if (checked) {
       updatePermissions(role, [...ALL_MENU_KEYS]);
     } else {
-      // admin은 settings 유지
       updatePermissions(role, role === 'admin' ? ['settings'] : []);
     }
   };
@@ -118,7 +123,6 @@ function PermissionsPanel({
                     )}>
                       {ROLE_LABELS[role]}
                     </span>
-                    {/* 전체 선택/해제 */}
                     <button
                       onClick={() => {
                         const allChecked = ALL_MENU_KEYS.every((m) => permissions[role]?.includes(m));
@@ -186,19 +190,20 @@ function PermissionsPanel({
 // ─── 계정 관리 ───
 function AccountsPanel({
   accounts,
-  updateAccount,
-  addAccount,
-  removeAccount,
+  addAccountToDb,
+  updateAccountInDb,
+  removeAccountFromDb,
 }: {
   accounts: UserAccount[];
-  updateAccount: (idx: number, account: UserAccount) => void;
-  addAccount: (account: UserAccount) => void;
-  removeAccount: (idx: number) => void;
+  addAccountToDb: (account: UserAccount) => Promise<boolean>;
+  updateAccountInDb: (account: UserAccount) => Promise<boolean>;
+  removeAccountFromDb: (account: UserAccount) => Promise<boolean>;
 }) {
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [showPw, setShowPw] = useState<number | null>(null);
   const [form, setForm] = useState<UserAccount>({ id: '', pw: '', name: '', role: 'frontdesk' });
   const [isAdding, setIsAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const startEdit = (idx: number) => {
     setEditIdx(idx);
@@ -212,19 +217,27 @@ function AccountsPanel({
     setForm({ id: '', pw: '', name: '', role: 'frontdesk' });
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!form.id || !form.pw || !form.name) {
       showToast({ type: 'error', title: '입력 오류', message: '모든 필드를 입력해주세요.' });
       return;
     }
-    if (editIdx !== null) {
-      updateAccount(editIdx, form);
+    if (editIdx === null) return;
+
+    setSaving(true);
+    try {
+      const target = accounts[editIdx];
+      await updateAccountInDb({ ...form, dbId: target.dbId });
       showToast({ type: 'success', title: '계정 수정', message: `${form.name} 계정이 수정되었습니다.` });
       setEditIdx(null);
+    } catch {
+      showToast({ type: 'error', title: '수정 실패', message: '계정 수정에 실패했습니다.' });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const saveAdd = () => {
+  const saveAdd = async () => {
     if (!form.id || !form.pw || !form.name) {
       showToast({ type: 'error', title: '입력 오류', message: '모든 필드를 입력해주세요.' });
       return;
@@ -234,21 +247,38 @@ function AccountsPanel({
       showToast({ type: 'error', title: '중복 아이디', message: '이미 존재하는 아이디입니다.' });
       return;
     }
-    addAccount(form);
-    showToast({ type: 'success', title: '계정 추가', message: `${form.name} 계정이 추가되었습니다.` });
-    setIsAdding(false);
-    setForm({ id: '', pw: '', name: '', role: 'frontdesk' });
+
+    setSaving(true);
+    try {
+      await addAccountToDb(form);
+      showToast({ type: 'success', title: '계정 추가', message: `${form.name} 계정이 추가되었습니다.` });
+      setIsAdding(false);
+      setForm({ id: '', pw: '', name: '', role: 'frontdesk' });
+    } catch {
+      showToast({ type: 'error', title: '추가 실패', message: '계정 추가에 실패했습니다.' });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleRemove = (idx: number) => {
-    if (accounts[idx].role === 'admin' && accounts.filter((a) => a.role === 'admin').length <= 1) {
+  const handleRemove = async (idx: number) => {
+    const account = accounts[idx];
+    if (account.role === 'admin' && accounts.filter((a) => a.role === 'admin').length <= 1) {
       showToast({ type: 'error', title: '삭제 불가', message: '관리자 계정은 최소 1개 필요합니다.' });
       return;
     }
-    const name = accounts[idx].name;
-    removeAccount(idx);
-    showToast({ type: 'success', title: '계정 삭제', message: `${name} 계정이 삭제되었습니다.` });
-    if (editIdx === idx) setEditIdx(null);
+    if (!confirm(`${account.name} 계정을 삭제하시겠습니까?`)) return;
+
+    setSaving(true);
+    try {
+      await removeAccountFromDb(account);
+      showToast({ type: 'success', title: '계정 삭제', message: `${account.name} 계정이 삭제되었습니다.` });
+      if (editIdx === idx) setEditIdx(null);
+    } catch {
+      showToast({ type: 'error', title: '삭제 실패', message: '계정 삭제에 실패했습니다.' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const roles: UserRole[] = ['admin', 'housekeeper', 'frontdesk'];
@@ -260,11 +290,12 @@ function AccountsPanel({
           <h3 className="font-semibold text-gray-700 flex items-center gap-2">
             <Users size={16} /> 계정 관리
           </h3>
-          <p className="text-xs text-gray-400 mt-1">로그인 계정을 추가/수정/삭제합니다.</p>
+          <p className="text-xs text-gray-400 mt-1">로그인 계정을 추가/수정/삭제합니다. (DB 연동)</p>
         </div>
         <button
           onClick={startAdd}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-pink-600 text-white rounded-lg text-xs font-medium hover:bg-pink-700"
+          disabled={saving}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-pink-600 text-white rounded-lg text-xs font-medium hover:bg-pink-700 disabled:opacity-50"
         >
           <UserPlus size={14} /> 계정 추가
         </button>
@@ -274,7 +305,7 @@ function AccountsPanel({
         {accounts.map((account, idx) => {
           const editing = editIdx === idx;
           return (
-            <div key={idx} className="p-4">
+            <div key={account.dbId || idx} className="p-4">
               {editing ? (
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -319,12 +350,13 @@ function AccountsPanel({
                     </label>
                   </div>
                   <div className="flex justify-end gap-2">
-                    <button onClick={() => setEditIdx(null)} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">취소</button>
+                    <button onClick={() => setEditIdx(null)} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg" disabled={saving}>취소</button>
                     <button
                       onClick={saveEdit}
-                      className="flex items-center gap-1 px-4 py-2 bg-pink-600 text-white rounded-lg text-sm font-medium hover:bg-pink-700"
+                      disabled={saving}
+                      className="flex items-center gap-1 px-4 py-2 bg-pink-600 text-white rounded-lg text-sm font-medium hover:bg-pink-700 disabled:opacity-50"
                     >
-                      <Save size={14} /> 저장
+                      {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} 저장
                     </button>
                   </div>
                 </div>
@@ -343,6 +375,9 @@ function AccountsPanel({
                     )}>
                       {ROLE_LABELS[account.role]}
                     </span>
+                    {account.dbId && (
+                      <span className="text-[10px] text-green-500 bg-green-50 px-1.5 py-0.5 rounded">DB</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -363,7 +398,8 @@ function AccountsPanel({
                     </button>
                     <button
                       onClick={() => handleRemove(idx)}
-                      className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                      disabled={saving}
+                      className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -425,12 +461,13 @@ function AccountsPanel({
                 </label>
               </div>
               <div className="flex justify-end gap-2">
-                <button onClick={() => setIsAdding(false)} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">취소</button>
+                <button onClick={() => setIsAdding(false)} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg" disabled={saving}>취소</button>
                 <button
                   onClick={saveAdd}
-                  className="flex items-center gap-1 px-4 py-2 bg-pink-600 text-white rounded-lg text-sm font-medium hover:bg-pink-700"
+                  disabled={saving}
+                  className="flex items-center gap-1 px-4 py-2 bg-pink-600 text-white rounded-lg text-sm font-medium hover:bg-pink-700 disabled:opacity-50"
                 >
-                  <UserPlus size={14} /> 추가
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />} 추가
                 </button>
               </div>
             </div>

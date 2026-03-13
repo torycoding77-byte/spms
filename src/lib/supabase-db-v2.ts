@@ -1,6 +1,65 @@
 import { supabase } from './supabase';
 import { MaintenanceLog, CommissionRate, DailyClosing, HousekeepingLog } from '@/types';
 
+// ==================== Staff Accounts ====================
+
+export interface StaffAccountRow {
+  id: string;
+  login_id: string;
+  password: string;
+  name: string;
+  role: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function fetchStaffAccounts(): Promise<StaffAccountRow[]> {
+  const { data, error } = await supabase
+    .from('staff_accounts')
+    .select('*')
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data || []) as StaffAccountRow[];
+}
+
+export async function insertStaffAccount(
+  account: { login_id: string; password: string; name: string; role: string }
+): Promise<StaffAccountRow> {
+  const { data, error } = await supabase
+    .from('staff_accounts')
+    .insert(account)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as StaffAccountRow;
+}
+
+export async function updateStaffAccount(
+  id: string,
+  updates: { login_id?: string; password?: string; name?: string; role?: string }
+): Promise<StaffAccountRow> {
+  const { data, error } = await supabase
+    .from('staff_accounts')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as StaffAccountRow;
+}
+
+export async function deleteStaffAccount(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('staff_accounts')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
 // ==================== Maintenance Logs ====================
 
 export async function fetchMaintenanceLogs(): Promise<MaintenanceLog[]> {
