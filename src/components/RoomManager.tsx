@@ -20,6 +20,13 @@ const ROOM_TYPE_OPTIONS: { value: RoomType; label: string }[] = [
   { value: 'family', label: '패밀리' },
 ];
 
+const ROOM_TYPE_COLORS: Record<RoomType, string> = {
+  standard: 'bg-blue-100 text-blue-700',
+  deluxe: 'bg-yellow-100 text-yellow-700',
+  suite: 'bg-purple-100 text-purple-700',
+  family: 'bg-green-100 text-green-700',
+};
+
 export default function RoomManager() {
   const { rooms, updateRoomStatus, updateRoomNotes, updateRoom, getReservationsForRoom, selectedDate } = useStore();
   const [editingRoom, setEditingRoom] = useState<string | null>(null);
@@ -119,6 +126,9 @@ export default function RoomManager() {
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center gap-1.5">
                   <h3 className="text-2xl font-bold text-gray-800">{room.room_number}</h3>
+                  <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', ROOM_TYPE_COLORS[room.room_type])}>
+                    {ROOM_TYPE_OPTIONS.find((o) => o.value === room.room_type)?.label || room.room_type}
+                  </span>
                   <button
                     onClick={() => openEditModal(room)}
                     className="p-1 text-gray-300 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
