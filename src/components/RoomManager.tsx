@@ -17,14 +17,12 @@ const ROOM_TYPE_OPTIONS: { value: RoomType; label: string }[] = [
   { value: 'standard', label: '스탠다드' },
   { value: 'deluxe', label: '디럭스' },
   { value: 'suite', label: '스위트' },
-  { value: 'family', label: '패밀리' },
 ];
 
-const ROOM_TYPE_COLORS: Record<RoomType, string> = {
+const ROOM_TYPE_COLORS: Record<string, string> = {
   standard: 'bg-blue-100 text-blue-700',
   deluxe: 'bg-yellow-100 text-yellow-700',
-  suite: 'bg-purple-100 text-purple-700',
-  family: 'bg-green-100 text-green-700',
+  suite: 'bg-blue-100 text-blue-700',
 };
 
 export default function RoomManager() {

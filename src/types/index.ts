@@ -2,7 +2,7 @@ export type ReservationSource = 'yanolja' | 'yeogi' | 'walkin';
 export type ReservationStatus = 'confirmed' | 'checked_in' | 'checked_out' | 'cancelled' | 'no_show';
 export type RoomStatus = 'available' | 'occupied' | 'cleaning' | 'maintenance' | 'blocked';
 export type PaymentMethod = 'cash' | 'card' | 'ota_transfer';
-export type RoomType = 'standard' | 'deluxe' | 'suite' | 'family';
+export type RoomType = 'standard' | 'deluxe' | 'suite';
 export type StayType = 'hourly' | 'nightly'; // 대실 / 숙박
 
 export interface Reservation {
