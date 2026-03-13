@@ -54,8 +54,8 @@ export default function HousekeepingCleaner() {
   useEffect(() => {
     loadToday();
     loadRequests();
-    // 15초마다 새 청소 요청 폴링
-    const poll = setInterval(loadRequests, 15000);
+    // 5초마다 새 청소 요청 폴링
+    const poll = setInterval(loadRequests, 5000);
     return () => clearInterval(poll);
   }, [loadToday, loadRequests]);
 

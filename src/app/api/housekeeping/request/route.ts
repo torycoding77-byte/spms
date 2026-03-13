@@ -6,22 +6,27 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
+function getKSTToday() {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().split('T')[0];
+}
+
 // 청소 요청 목록 조회
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get('status') || 'pending';
-  const today = new Date().toISOString().split('T')[0];
+  const today = getKSTToday();
 
   try {
     const { data, error } = await supabase
       .from('cleaning_requests')
       .select('*')
       .eq('status', status)
-      .gte('created_at', today + 'T00:00:00')
+      .gte('created_at', today + 'T00:00:00+09:00')
       .order('created_at', { ascending: false });
 
     if (error) {
-      // 테이블이 없으면 localStorage 폴백 안내
       return NextResponse.json({ data: [], fallback: true });
     }
     return NextResponse.json({ data: data || [] });
@@ -59,7 +64,6 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
-      // DB 테이블 없으면 localStorage용 응답
       const fallbackData = {
         id: crypto.randomUUID(),
         room_number,
