@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { HousekeepingLog } from '@/types';
 import { cn, formatDate } from '@/lib/utils';
-import { CalendarDays, Clock, SprayCan, TrendingUp, ChevronLeft, ChevronRight, User } from 'lucide-react';
-import { fetchHousekeepingLogs } from '@/lib/supabase-db-v2';
+import { CalendarDays, Clock, SprayCan, TrendingUp, ChevronLeft, ChevronRight, User, Trash2 } from 'lucide-react';
+import { fetchHousekeepingLogs, deleteHousekeepingLog } from '@/lib/supabase-db-v2';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, addDays, addWeeks, addMonths, subWeeks, subMonths, subDays, eachDayOfInterval } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
@@ -21,6 +21,7 @@ export default function HousekeepingDashboard() {
   const { rooms } = useStore();
   const [logs, setLogs] = useState<HousekeepingLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('daily');
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -70,6 +71,19 @@ export default function HousekeepingDashboard() {
     if (viewMode === 'daily') setCurrentDate((d) => dir === 1 ? addDays(d, 1) : subDays(d, 1));
     else if (viewMode === 'weekly') setCurrentDate((d) => dir === 1 ? addWeeks(d, 1) : subWeeks(d, 1));
     else setCurrentDate((d) => dir === 1 ? addMonths(d, 1) : subMonths(d, 1));
+  };
+
+  const handleDeleteLog = async (id: string) => {
+    if (!confirm('이 청소 이력을 삭제하시겠습니까?')) return;
+    setDeletingId(id);
+    try {
+      await deleteHousekeepingLog(id);
+      setLogs((prev) => prev.filter((l) => l.id !== id));
+    } catch {
+      alert('삭제에 실패했습니다.');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   // === Stats ===
@@ -462,6 +476,7 @@ export default function HousekeepingDashboard() {
                       <th className="text-left py-2 px-2 font-medium">객실</th>
                       <th className="text-left py-2 px-2 font-medium">담당자</th>
                       <th className="text-left py-2 px-2 font-medium">완료 시간</th>
+                      <th className="w-10"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -471,6 +486,20 @@ export default function HousekeepingDashboard() {
                         <td className="py-2 px-2 text-gray-600">{log.cleaner_name}</td>
                         <td className="py-2 px-2 text-gray-500">
                           {format(new Date(log.cleaned_at), 'M/d HH:mm', { locale: ko })}
+                        </td>
+                        <td className="py-2 px-1">
+                          <button
+                            onClick={() => handleDeleteLog(log.id)}
+                            disabled={deletingId === log.id}
+                            className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                            title="삭제"
+                          >
+                            {deletingId === log.id ? (
+                              <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Trash2 size={14} />
+                            )}
+                          </button>
                         </td>
                       </tr>
                     ))}
