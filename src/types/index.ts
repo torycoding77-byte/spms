@@ -114,6 +114,15 @@ export interface HousekeepingLog {
   created_at: string;
 }
 
+export interface CleaningRequest {
+  id: string;
+  room_number: string;
+  requested_by: string;
+  message: string;
+  status: 'pending' | 'accepted' | 'completed';
+  created_at: string;
+}
+
 export interface DailySummary {
   date: string;
   total_sales: number;

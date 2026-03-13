@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { HousekeepingLog } from '@/types';
+import { HousekeepingLog, CleaningRequest } from '@/types';
 import { cn } from '@/lib/utils';
-import { SprayCan, X, Trash2, Clock, Check } from 'lucide-react';
+import { SprayCan, X, Trash2, Clock, Check, Bell, CheckCheck } from 'lucide-react';
 import { fetchHousekeepingLogs, deleteHousekeepingLog } from '@/lib/supabase-db-v2';
 
 function formatTime(iso: string) {
@@ -27,8 +27,18 @@ export default function HousekeepingCleaner() {
   const [confirmTime, setConfirmTime] = useState('');
   // 이력 상세 모달
   const [detailRoom, setDetailRoom] = useState<string | null>(null);
+  // 청소 요청 목록
+  const [requests, setRequests] = useState<CleaningRequest[]>([]);
 
   const today = new Date().toISOString().split('T')[0];
+
+  const loadRequests = useCallback(async () => {
+    try {
+      const res = await fetch('/api/housekeeping/request?status=pending');
+      const result = await res.json();
+      if (result.data) setRequests(result.data);
+    } catch { /* ignore */ }
+  }, []);
 
   const loadToday = useCallback(async () => {
     try {
@@ -43,7 +53,11 @@ export default function HousekeepingCleaner() {
 
   useEffect(() => {
     loadToday();
-  }, [loadToday]);
+    loadRequests();
+    // 15초마다 새 청소 요청 폴링
+    const poll = setInterval(loadRequests, 15000);
+    return () => clearInterval(poll);
+  }, [loadToday, loadRequests]);
 
   // 확인 팝업이 열려있는 동안 시간 업데이트
   useEffect(() => {
@@ -64,6 +78,23 @@ export default function HousekeepingCleaner() {
     logsByRoom.get(l.room_number)!.push(l);
   });
   logsByRoom.forEach((logs) => logs.sort((a, b) => a.cleaned_at.localeCompare(b.cleaned_at)));
+
+  // 청소 요청 수락 처리
+  const acceptRequest = async (req: CleaningRequest) => {
+    try {
+      await fetch('/api/housekeeping/request', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: req.id, status: 'accepted' }),
+      });
+      setRequests((prev) => prev.filter((r) => r.id !== req.id));
+      // 바로 청소 완료 확인 팝업 열기
+      setConfirmRoom(req.room_number);
+    } catch { /* ignore */ }
+  };
+
+  // 요청된 방 번호 세트 (카드에 표시용)
+  const requestedRooms = new Set(requests.map((r) => r.room_number));
 
   // 객실 클릭 → 확인 팝업 오픈
   const openConfirm = (roomNumber: string) => {
@@ -113,6 +144,17 @@ export default function HousekeepingCleaner() {
             : r
         ),
       }));
+
+      // 해당 방의 청소 요청이 있으면 완료 처리
+      const pendingReq = requests.find((r) => r.room_number === targetRoom);
+      if (pendingReq) {
+        fetch('/api/housekeeping/request', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: pendingReq.id, status: 'completed' }),
+        }).catch(() => {});
+        setRequests((prev) => prev.filter((r) => r.room_number !== targetRoom));
+      }
     } catch (err) {
       console.error(`[HK] handleConfirmClean 실패:`, err);
       alert('네트워크 오류가 발생했습니다.');
@@ -176,12 +218,46 @@ export default function HousekeepingCleaner() {
         </div>
       </div>
 
+      {/* 청소 요청 알림 */}
+      {requests.length > 0 && (
+        <div className="mb-4 space-y-2">
+          <div className="flex items-center gap-2 text-sm font-bold text-orange-600">
+            <Bell size={16} className="animate-bounce" />
+            청소 요청 {requests.length}건
+          </div>
+          {requests.map((req) => (
+            <div
+              key={req.id}
+              className="flex items-center justify-between bg-orange-50 border-2 border-orange-300 rounded-xl px-4 py-3 animate-pulse-once"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-bold text-orange-700">{req.room_number}호</span>
+                  <span className="text-[10px] bg-orange-200 text-orange-700 px-1.5 py-0.5 rounded-full font-medium">
+                    {new Date(req.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <p className="text-xs text-orange-600 mt-0.5 truncate">{req.message}</p>
+              </div>
+              <button
+                onClick={() => acceptRequest(req)}
+                className="ml-3 shrink-0 flex items-center gap-1 bg-orange-500 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-orange-600 active:scale-95 transition-all"
+              >
+                <CheckCheck size={14} />
+                수락
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Room Grid */}
       <div className="grid grid-cols-3 gap-3">
         {activeRooms.map((room) => {
           const roomLogs = logsByRoom.get(room.room_number) || [];
           const cleanCount = roomLogs.length;
           const isCleaned = cleanCount > 0;
+          const isRequested = requestedRooms.has(room.room_number);
 
           return (
             <button
@@ -189,11 +265,19 @@ export default function HousekeepingCleaner() {
               onClick={() => openConfirm(room.room_number)}
               className={cn(
                 'relative rounded-xl border-2 p-3 transition-all active:scale-95 text-left',
-                isCleaned
-                  ? 'bg-green-50 border-green-400 text-green-700'
-                  : 'bg-white border-gray-200 text-gray-700 hover:border-pink-300 hover:bg-pink-50'
+                isRequested
+                  ? 'bg-orange-50 border-orange-400 text-orange-700 ring-2 ring-orange-300 ring-offset-1'
+                  : isCleaned
+                    ? 'bg-green-50 border-green-400 text-green-700'
+                    : 'bg-white border-gray-200 text-gray-700 hover:border-pink-300 hover:bg-pink-50'
               )}
             >
+              {/* 요청 뱃지 */}
+              {isRequested && (
+                <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
+                  <Bell size={10} className="text-white" />
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-xl font-bold">{room.room_number}</span>
                 {cleanCount > 0 && (
@@ -205,9 +289,17 @@ export default function HousekeepingCleaner() {
                   </span>
                 )}
               </div>
-              {isCleaned ? (
+              {isRequested ? (
+                <div className="mt-1.5">
+                  <div className="text-[10px] text-orange-600 font-bold flex items-center gap-1">
+                    <Bell size={8} className="shrink-0" />
+                    청소 요청됨
+                  </div>
+                  <div className="text-[10px] text-orange-400 mt-0.5">탭하여 청소 완료</div>
+                </div>
+              ) : isCleaned ? (
                 <div className="mt-1.5 space-y-0.5">
-                  {roomLogs.map((log, i) => (
+                  {roomLogs.map((log) => (
                     <div key={log.id} className="text-[10px] text-green-600 flex items-center gap-1">
                       <Check size={8} className="text-green-400 shrink-0" />
                       {formatTime(log.cleaned_at)}
