@@ -218,7 +218,9 @@ export const useStore = create<AppState>((set, get) => ({
     }));
     try {
       await updateRoomDb(roomNumber, updates);
+      console.log(`[Store] updateRoomStatus: ${roomNumber} → ${status} DB 성공`);
     } catch (err) {
+      console.error(`[Store] updateRoomStatus: ${roomNumber} → ${status} DB 실패:`, err);
       set({ error: err instanceof Error ? err.message : 'Failed to update room' });
     }
   },

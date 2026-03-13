@@ -6,8 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { HousekeepingLog } from '@/types';
 import { cn } from '@/lib/utils';
 import { SprayCan, X, Trash2, Clock, Check } from 'lucide-react';
-import { fetchHousekeepingLogs, insertHousekeepingLog, deleteHousekeepingLog } from '@/lib/supabase-db-v2';
-import { updateRoomDb } from '@/lib/supabase-db';
+import { fetchHousekeepingLogs, insertHousekeepingLog, deleteHousekeepingLog, updateRoomStatusAfterCleaning } from '@/lib/supabase-db-v2';
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
@@ -85,18 +84,14 @@ export default function HousekeepingCleaner() {
       });
       setTodayLogs((prev) => [log, ...prev]);
 
-      // 2. 객실 상태를 '판매가능'으로 직접 DB 업데이트
-      try {
-        await updateRoomDb(targetRoom, {
-          status: 'available',
-          last_cleaned: new Date().toISOString(),
-        });
-      } catch { /* DB 실패 시 store fallback */ }
+      // 2. 객실 상태를 '판매가능'으로 DB 직접 업데이트
+      const dbOk = await updateRoomStatusAfterCleaning(targetRoom);
+      console.log(`[HK] Room ${targetRoom} DB update: ${dbOk ? '성공' : '실패'}`);
 
       // 3. store 로컬 상태도 동기화
       updateRoomStatus(targetRoom, 'available');
-    } catch {
-      // silently fail
+    } catch (err) {
+      console.error(`[HK] handleConfirmClean 실패:`, err);
     } finally {
       setSaving(null);
       setConfirmRoom(null);

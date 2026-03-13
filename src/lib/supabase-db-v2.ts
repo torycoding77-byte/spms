@@ -188,3 +188,25 @@ export async function deleteHousekeepingLog(id: string): Promise<void> {
   const logs = loadHkFromStorage().filter((l) => l.id !== id);
   saveHkToStorage(logs);
 }
+
+// ==================== Room Status Update (for Housekeeping) ====================
+
+export async function updateRoomStatusAfterCleaning(roomNumber: string): Promise<boolean> {
+  try {
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from('rooms')
+      .update({ status: 'available', last_cleaned: now })
+      .eq('room_number', roomNumber);
+
+    if (error) {
+      console.error(`[HK-DB] Room ${roomNumber} status update failed:`, error);
+      return false;
+    }
+    console.log(`[HK-DB] Room ${roomNumber} → available 성공`);
+    return true;
+  } catch (err) {
+    console.error(`[HK-DB] Room ${roomNumber} status update exception:`, err);
+    return false;
+  }
+}
