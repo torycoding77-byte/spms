@@ -19,13 +19,15 @@ export default function ExcelUploader() {
   const [saving, setSaving] = useState(false);
 
   // 파싱된 예약을 분류:
-  //   newly        : 신규 (DB에 없음) → 저장 (취소 상태도 이력 보존을 위해 저장)
+  //   newly        : 신규 (DB에 없음) → 저장
   //   cancelUpdate : 기존 DB 활성 예약이 엑셀에서 취소됨 → status=cancelled 업데이트
-  //   skipped      : 이미 존재하는 활성 예약 (변경 없음) → 무시
+  //   priceFix     : 기존 DB 레코드의 금액이 0인데 엑셀엔 값이 있음 → 금액만 덮어쓰기
+  //   skipped      : 이미 존재하며 금액도 정상 → 무시
   const partition = parseResult ? parseResult.reservations.reduce<{
     newly: typeof parseResult.reservations;
     skipped: typeof parseResult.reservations;
     cancelUpdate: typeof parseResult.reservations;
+    priceFix: typeof parseResult.reservations;
   }>(
     (acc, r) => {
       const existing = r.external_id
@@ -37,13 +39,19 @@ export default function ExcelUploader() {
       }
       if (r.status === 'cancelled' && existing.status !== 'cancelled') {
         acc.cancelUpdate.push(r);
+      } else if (
+        (existing.sale_price === 0 || existing.settlement_price === 0) &&
+        ((r.sale_price || 0) > 0 || (r.settlement_price || 0) > 0)
+      ) {
+        // 기존 레코드가 0원이고 새 데이터에 금액이 있으면 덮어쓰기 (파서 버그 복구)
+        acc.priceFix.push(r);
       } else {
         acc.skipped.push(r);
       }
       return acc;
     },
-    { newly: [], skipped: [], cancelUpdate: [] }
-  ) : { newly: [], skipped: [], cancelUpdate: [] };
+    { newly: [], skipped: [], cancelUpdate: [], priceFix: [] }
+  ) : { newly: [], skipped: [], cancelUpdate: [], priceFix: [] };
 
   const processFile = useCallback(async (file: File) => {
     setError('');
@@ -65,7 +73,7 @@ export default function ExcelUploader() {
 
   const handleConfirm = async () => {
     if (!parseResult) return;
-    const toSave = [...partition.newly, ...partition.cancelUpdate];
+    const toSave = [...partition.newly, ...partition.cancelUpdate, ...partition.priceFix];
     if (toSave.length === 0) {
       showToast({
         type: 'info',
@@ -79,10 +87,14 @@ export default function ExcelUploader() {
     try {
       await addReservations(toSave as Reservation[]);
       setStep('done');
+      const parts = [`신규 ${partition.newly.length}건`];
+      if (partition.priceFix.length > 0) parts.push(`금액 복구 ${partition.priceFix.length}건`);
+      if (partition.cancelUpdate.length > 0) parts.push(`취소 처리 ${partition.cancelUpdate.length}건`);
+      if (partition.skipped.length > 0) parts.push(`건너뜀 ${partition.skipped.length}건`);
       showToast({
         type: 'success',
         title: '업로드 완료',
-        message: `신규 ${partition.newly.length}건${partition.cancelUpdate.length > 0 ? ` · 취소 처리 ${partition.cancelUpdate.length}건` : ''}${partition.skipped.length > 0 ? ` · 건너뜀 ${partition.skipped.length}건` : ''}`,
+        message: parts.join(' · '),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : '저장 실패');
@@ -211,13 +223,21 @@ export default function ExcelUploader() {
             </div>
 
             {/* 중복 체크 결과 */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <StatBox label="신규 등록 예정" value={`${partition.newly.length}건`} color="text-green-600" />
+              <StatBox label="금액 복구" value={`${partition.priceFix.length}건`}
+                color={partition.priceFix.length > 0 ? 'text-blue-600' : 'text-gray-400'} />
               <StatBox label="취소 처리" value={`${partition.cancelUpdate.length}건`}
                 color={partition.cancelUpdate.length > 0 ? 'text-red-500' : 'text-gray-400'} />
               <StatBox label="중복 (건너뜀)" value={`${partition.skipped.length}건`}
                 color={partition.skipped.length > 0 ? 'text-gray-500' : 'text-gray-400'} />
             </div>
+
+            {partition.priceFix.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700 mb-2">
+                💰 <b>{partition.priceFix.length}건</b>은 기존 DB에 금액이 0으로 저장되어 있어 이번 엑셀 값으로 <b>금액을 복구</b>합니다.
+              </div>
+            )}
 
             {partition.skipped.length > 0 && (
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-600 mb-2">
@@ -258,13 +278,16 @@ export default function ExcelUploader() {
                   {parseResult.reservations.map((r, i) => {
                     const isSkipped = partition.skipped.includes(r);
                     const isCancelUpdate = partition.cancelUpdate.includes(r);
+                    const isPriceFix = partition.priceFix.includes(r);
                     const rowClass = isSkipped
                       ? 'bg-gray-50/70 opacity-60'
                       : isCancelUpdate
                         ? 'bg-red-50/50'
-                        : !r.room_number
-                          ? 'bg-orange-50/50'
-                          : '';
+                        : isPriceFix
+                          ? 'bg-blue-50/50'
+                          : !r.room_number
+                            ? 'bg-orange-50/50'
+                            : '';
                     return (
                     <tr key={i} className={cn('hover:bg-gray-50', rowClass)}>
                       <td className="px-3 py-2 text-gray-400">{i + 1}</td>
@@ -273,6 +296,8 @@ export default function ExcelUploader() {
                           <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-medium">건너뜀</span>
                         ) : isCancelUpdate ? (
                           <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-medium">취소</span>
+                        ) : isPriceFix ? (
+                          <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">금액복구</span>
                         ) : (
                           <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">신규</span>
                         )}
@@ -322,7 +347,7 @@ export default function ExcelUploader() {
               {saving ? (
                 <><FileSpreadsheet size={16} className="animate-spin" /> 저장 중...</>
               ) : (
-                <><Save size={16} /> 신규 {partition.newly.length}건 저장{partition.cancelUpdate.length > 0 ? ` · 취소 처리 ${partition.cancelUpdate.length}건` : ''}</>
+                <><Save size={16} /> 신규 {partition.newly.length}건{partition.priceFix.length > 0 ? ` · 금액복구 ${partition.priceFix.length}건` : ''}{partition.cancelUpdate.length > 0 ? ` · 취소 ${partition.cancelUpdate.length}건` : ''}</>
               )}
             </button>
           </div>
