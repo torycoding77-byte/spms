@@ -76,13 +76,17 @@ function mapReservationStatus(raw: string): import('@/types').ReservationStatus 
 }
 
 function safeNumber(val: unknown): number {
-  if (typeof val === 'number') return val;
-  if (typeof val === 'string') {
-    const cleaned = val.replace(/[,원₩\s]/g, '');
-    const num = parseFloat(cleaned);
-    return isNaN(num) ? 0 : num;
-  }
-  return 0;
+  if (val === null || val === undefined) return 0;
+  if (typeof val === 'number') return Number.isFinite(val) ? Math.round(val) : 0;
+  if (typeof val === 'boolean') return val ? 1 : 0;
+  // 문자열(텍스트 형식 숫자) · 기타 타입 모두 문자열화 후 숫자 외 문자 제거
+  const str = String(val).trim();
+  if (!str) return 0;
+  // 숫자(0-9), 소수점(.), 음수부호(-) 만 남김
+  const cleaned = str.replace(/[^\d.\-]/g, '');
+  if (!cleaned || cleaned === '-' || cleaned === '.') return 0;
+  const num = parseFloat(cleaned);
+  return Number.isFinite(num) ? Math.round(num) : 0;
 }
 
 function safeString(val: unknown): string {
@@ -105,10 +109,28 @@ const yanoljaParser: ChannelParser = {
   detect: (fileName, headers) =>
     /야놀자|yanolja/i.test(fileName) ||
     headers.includes('NOL') ||
-    headers.includes('입금예정가'),
+    headers.includes('입금예정가') ||
+    headers.includes('판매금액'),
   parse: (workbook) => {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+    // 헤더 행 자동 감지 (안내 문구/빈 행이 앞에 있을 수 있음)
+    const refStartRow = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']).s.r : 0;
+    const allRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
+    let headerRowIdx = 0;
+    for (let i = 0; i < Math.min(10, allRows.length); i++) {
+      const rowStr = (allRows[i] || []).map(String).join(',');
+      if (
+        rowStr.includes('NOL 숙소 예약번호') ||
+        rowStr.includes('판매금액') ||
+        rowStr.includes('입금예정가') ||
+        (rowStr.includes('예약번호') && rowStr.includes('예약자'))
+      ) {
+        headerRowIdx = i;
+        break;
+      }
+    }
+    // range 옵션은 시트의 절대 행 인덱스를 요구하므로 !ref 시작 행을 더한다
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { range: headerRowIdx + refStartRow });
     const results: Partial<Reservation>[] = [];
 
     for (const row of rows) {
@@ -163,7 +185,7 @@ const yeogiParser: ChannelParser = {
   parse: (workbook) => {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     // 여기어때는 헤더가 1행이 아닐 수 있음 (안내 문구 행이 앞에 있음)
-    // 실제 헤더 행을 자동 감지: '통합예약번호'가 포함된 행 찾기
+    const refStartRow = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']).s.r : 0;
     const allRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
     let headerRowIdx = 0;
     for (let i = 0; i < Math.min(10, allRows.length); i++) {
@@ -173,8 +195,8 @@ const yeogiParser: ChannelParser = {
         break;
       }
     }
-    // 헤더 행 기준으로 데이터를 다시 파싱
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { range: headerRowIdx });
+    // range는 시트의 절대 행 인덱스가 필요하므로 !ref 시작 행을 더한다
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { range: headerRowIdx + refStartRow });
     const results: Partial<Reservation>[] = [];
 
     for (const row of rows) {
@@ -259,6 +281,7 @@ export function parseExcelFile(buffer: ArrayBuffer, fileName: string): ParseResu
   const workbook = XLSX.read(buffer, { type: 'array' });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   // 실제 헤더 행 자동 감지 (첫 10행 중 컬럼명이 있는 행)
+  const refStartRow = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']).s.r : 0;
   const allRawRows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1 });
   let headerRowIdx = 0;
   for (let i = 0; i < Math.min(10, allRawRows.length); i++) {
@@ -271,7 +294,7 @@ export function parseExcelFile(buffer: ArrayBuffer, fileName: string): ParseResu
   const rawHeaders = allRawRows[headerRowIdx] || [];
   const headers = rawHeaders.map(String);
   const headerStr = headers.join(',');
-  const totalRows = XLSX.utils.sheet_to_json(sheet, { range: headerRowIdx }).length;
+  const totalRows = XLSX.utils.sheet_to_json(sheet, { range: headerRowIdx + refStartRow }).length;
 
   // 자동 감지
   for (const parser of PARSERS) {
