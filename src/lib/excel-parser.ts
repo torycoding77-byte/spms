@@ -94,6 +94,39 @@ function safeString(val: unknown): string {
   return String(val).trim();
 }
 
+// ==================== 헤더 자동 감지 헬퍼 ====================
+
+// sheet_to_json({range:N})는 시트의 절대 행 인덱스와 엮여서 !ref가 A2부터 시작할 때
+// 의도치 않게 __EMPTY 키가 나오는 등 혼란스럽다. 안전하게 헤더 행을 찾고 직접 row 객체를
+// 조립한다.
+function buildRows(
+  sheet: XLSX.WorkSheet,
+  isHeaderRow: (rowStr: string) => boolean,
+): { headers: string[]; rows: Record<string, unknown>[] } {
+  const allRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null, blankrows: false });
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(15, allRows.length); i++) {
+    const rowStr = (allRows[i] || []).map((v) => (v == null ? '' : String(v))).join(',');
+    if (isHeaderRow(rowStr)) { headerIdx = i; break; }
+  }
+  if (headerIdx < 0) {
+    // 헤더 못 찾으면 첫 행을 가정
+    headerIdx = 0;
+  }
+  const headerRow = (allRows[headerIdx] || []) as unknown[];
+  const headers = headerRow.map((h) => (h == null ? '' : String(h).trim()));
+  const dataRows = allRows.slice(headerIdx + 1);
+  const rows: Record<string, unknown>[] = dataRows.map((arr) => {
+    const obj: Record<string, unknown> = {};
+    (arr as unknown[]).forEach((v, i) => {
+      const key = headers[i];
+      if (key) obj[key] = v;
+    });
+    return obj;
+  });
+  return { headers, rows };
+}
+
 // ==================== 채널별 파서 (확장 가능 구조) ====================
 
 interface ChannelParser {
@@ -113,24 +146,12 @@ const yanoljaParser: ChannelParser = {
     headers.includes('판매금액'),
   parse: (workbook) => {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    // 헤더 행 자동 감지 (안내 문구/빈 행이 앞에 있을 수 있음)
-    const refStartRow = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']).s.r : 0;
-    const allRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
-    let headerRowIdx = 0;
-    for (let i = 0; i < Math.min(10, allRows.length); i++) {
-      const rowStr = (allRows[i] || []).map(String).join(',');
-      if (
-        rowStr.includes('NOL 숙소 예약번호') ||
-        rowStr.includes('판매금액') ||
-        rowStr.includes('입금예정가') ||
-        (rowStr.includes('예약번호') && rowStr.includes('예약자'))
-      ) {
-        headerRowIdx = i;
-        break;
-      }
-    }
-    // range 옵션은 시트의 절대 행 인덱스를 요구하므로 !ref 시작 행을 더한다
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { range: headerRowIdx + refStartRow });
+    const { rows } = buildRows(sheet, (rowStr) =>
+      rowStr.includes('NOL 숙소 예약번호') ||
+      rowStr.includes('판매금액') ||
+      rowStr.includes('입금예정가') ||
+      (rowStr.includes('예약번호') && rowStr.includes('예약자'))
+    );
     const results: Partial<Reservation>[] = [];
 
     for (const row of rows) {
@@ -184,19 +205,10 @@ const yeogiParser: ChannelParser = {
     headers.includes('정산 금액'),
   parse: (workbook) => {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    // 여기어때는 헤더가 1행이 아닐 수 있음 (안내 문구 행이 앞에 있음)
-    const refStartRow = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']).s.r : 0;
-    const allRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
-    let headerRowIdx = 0;
-    for (let i = 0; i < Math.min(10, allRows.length); i++) {
-      const rowStr = (allRows[i] || []).map(String).join(',');
-      if (rowStr.includes('통합예약번호') || rowStr.includes('예약번호')) {
-        headerRowIdx = i;
-        break;
-      }
-    }
-    // range는 시트의 절대 행 인덱스가 필요하므로 !ref 시작 행을 더한다
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { range: headerRowIdx + refStartRow });
+    const { rows } = buildRows(sheet, (rowStr) =>
+      rowStr.includes('통합예약번호') ||
+      rowStr.includes('예약번호') && rowStr.includes('판매가')
+    );
     const results: Partial<Reservation>[] = [];
 
     for (const row of rows) {
@@ -280,21 +292,11 @@ export interface ParseResult {
 export function parseExcelFile(buffer: ArrayBuffer, fileName: string): ParseResult {
   const workbook = XLSX.read(buffer, { type: 'array' });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  // 실제 헤더 행 자동 감지 (첫 10행 중 컬럼명이 있는 행)
-  const refStartRow = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']).s.r : 0;
-  const allRawRows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1 });
-  let headerRowIdx = 0;
-  for (let i = 0; i < Math.min(10, allRawRows.length); i++) {
-    const rowStr = (allRawRows[i] || []).map(String).join(',');
-    if (rowStr.includes('예약번호') || rowStr.includes('NOL') || rowStr.includes('통합예약번호')) {
-      headerRowIdx = i;
-      break;
-    }
-  }
-  const rawHeaders = allRawRows[headerRowIdx] || [];
-  const headers = rawHeaders.map(String);
+  const { headers, rows: sampleRows } = buildRows(sheet, (rowStr) =>
+    rowStr.includes('예약번호') || rowStr.includes('NOL') || rowStr.includes('통합예약번호') || rowStr.includes('판매금액')
+  );
   const headerStr = headers.join(',');
-  const totalRows = XLSX.utils.sheet_to_json(sheet, { range: headerRowIdx + refStartRow }).length;
+  const totalRows = sampleRows.length;
 
   // 자동 감지
   for (const parser of PARSERS) {
