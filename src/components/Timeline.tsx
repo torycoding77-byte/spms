@@ -386,7 +386,10 @@ export default function Timeline() {
                       const clickedDate = new Date(dates[0]);
                       clickedDate.setDate(clickedDate.getDate() + dayOffset);
                       clickedDate.setHours(hour, 0, 0, 0);
-                      setWalkinCheckIn(clickedDate.toISOString().slice(0, 16));
+                      // 로컬 타임존 기준으로 "YYYY-MM-DDTHH:mm" 포맷 (datetime-local input용)
+                      const pad = (n: number) => String(n).padStart(2, '0');
+                      const local = `${clickedDate.getFullYear()}-${pad(clickedDate.getMonth() + 1)}-${pad(clickedDate.getDate())}T${pad(clickedDate.getHours())}:${pad(clickedDate.getMinutes())}`;
+                      setWalkinCheckIn(local);
                       setWalkinRoom(room.room_number);
                     }}
                   >
