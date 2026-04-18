@@ -7,7 +7,7 @@ import {
   formatCurrency, formatDate, getSourceLabel,
   getStatusLabel, getStatusColor, cn
 } from '@/lib/utils';
-import { Search, Filter, Plus, MoreHorizontal, ClipboardList } from 'lucide-react';
+import { Search, Filter, Plus, MoreHorizontal, ClipboardList, Trash2 } from 'lucide-react';
 import ReservationModal from './ReservationModal';
 import WalkinModal from './WalkinModal';
 
@@ -36,11 +36,25 @@ function getSourceBadgeColor(source: ReservationSource): string {
 }
 
 export default function ReservationManager() {
-  const { reservations } = useStore();
+  const { reservations, selectedDate, setSelectedDate, deleteReservation } = useStore();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const handleRowDelete = async (res: Reservation) => {
+    if (!confirm(`"${res.guest_name}"님의 예약을 영구 삭제하시겠습니까?\n\n⚠️ 되돌릴 수 없습니다.`)) return;
+    setDeletingId(res.id);
+    try {
+      await deleteReservation(res.id);
+    } catch {
+      alert('삭제 실패. 다시 시도해주세요.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'' | ReservationStatus>('');
   const [sourceFilter, setSourceFilter] = useState<'' | ReservationSource>('');
-  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
+  // 타임라인과 동일한 날짜를 사용하도록 store 연동
+  const dateFilter = selectedDate;
+  const setDateFilter = setSelectedDate;
   const [selectedRes, setSelectedRes] = useState<Reservation | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
 
@@ -262,16 +276,28 @@ export default function ReservationManager() {
                         {getStatusLabel(res.status)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        className="p-1 hover:bg-gray-100 rounded"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedRes(res);
-                        }}
-                      >
-                        <MoreHorizontal size={16} className="text-gray-400" />
-                      </button>
+                    <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                          onClick={() => setSelectedRes(res)}
+                          title="상세 보기"
+                        >
+                          <MoreHorizontal size={16} />
+                        </button>
+                        <button
+                          className="p-1.5 hover:bg-red-50 rounded text-red-400 hover:text-red-600 disabled:opacity-40"
+                          onClick={() => handleRowDelete(res)}
+                          disabled={deletingId === res.id}
+                          title="영구 삭제"
+                        >
+                          {deletingId === res.id ? (
+                            <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Trash2 size={14} />
+                          )}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

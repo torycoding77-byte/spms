@@ -7,7 +7,7 @@ import {
   formatCurrency, formatDateTime, getSourceLabel,
   getStatusLabel, getStatusColor, getSourceBgColor
 } from '@/lib/utils';
-import { X, Phone, Car, CreditCard, Edit2, Check, RotateCcw, MessageSquare } from 'lucide-react';
+import { X, Phone, Car, CreditCard, Edit2, Check, RotateCcw, MessageSquare, Trash2 } from 'lucide-react';
 
 interface Props {
   reservation: Reservation;
@@ -21,9 +21,24 @@ function toLocalDatetime(iso: string) {
 }
 
 export default function ReservationModal({ reservation: res, onClose }: Props) {
-  const { updateReservation, rooms } = useStore();
+  const { updateReservation, deleteReservation, rooms } = useStore();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    const confirmMsg = `"${res.guest_name}"님의 예약(${res.external_id})을\n\n영구 삭제하시겠습니까?\n\n⚠️ 이 작업은 되돌릴 수 없습니다.`;
+    if (!confirm(confirmMsg)) return;
+    setDeleting(true);
+    try {
+      await deleteReservation(res.id);
+      onClose();
+    } catch {
+      alert('삭제 실패. 다시 시도해주세요.');
+    } finally {
+      setDeleting(false);
+    }
+  };
   const [form, setForm] = useState({
     room_number: res.room_number,
     guest_name: res.guest_name,
@@ -378,6 +393,15 @@ export default function ReservationModal({ reservation: res, onClose }: Props) {
               취소
             </button>
           )}
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="px-3 bg-red-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center gap-1"
+            title="예약 영구 삭제"
+          >
+            <Trash2 size={14} />
+            {deleting ? '삭제중' : '삭제'}
+          </button>
         </div>
       </div>
     </div>
