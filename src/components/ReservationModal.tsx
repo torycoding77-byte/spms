@@ -48,7 +48,7 @@ export default function ReservationModal({ reservation: res, onClose }: Props) {
     check_in: toLocalDatetime(res.check_in),
     check_out: toLocalDatetime(res.check_out),
     sale_price: res.sale_price.toString(),
-    commission: res.commission.toString(),
+    settlement_price: res.settlement_price.toString(),
     payment_method: res.payment_method,
     memo: res.memo || '',
   });
@@ -61,7 +61,9 @@ export default function ReservationModal({ reservation: res, onClose }: Props) {
   const handleSave = async () => {
     setSaving(true);
     const salePrice = parseInt(form.sale_price) || 0;
-    const commission = parseInt(form.commission) || 0;
+    const settlementPrice = parseInt(form.settlement_price) || 0;
+    // 수수료는 자동 계산 (판매금액 − 정산금액)
+    const commission = Math.max(0, salePrice - settlementPrice);
     await updateReservation(res.id, {
       room_number: form.room_number,
       guest_name: form.guest_name,
@@ -71,8 +73,8 @@ export default function ReservationModal({ reservation: res, onClose }: Props) {
       check_in: new Date(form.check_in).toISOString(),
       check_out: new Date(form.check_out).toISOString(),
       sale_price: salePrice,
+      settlement_price: settlementPrice,
       commission,
-      settlement_price: salePrice - commission,
       payment_method: form.payment_method as PaymentMethod,
       memo: form.memo,
     });
@@ -208,11 +210,11 @@ export default function ReservationModal({ reservation: res, onClose }: Props) {
                 />
               </label>
               <label className="block">
-                <span className="text-xs text-gray-500">수수료</span>
+                <span className="text-xs text-gray-500">정산금액</span>
                 <input
                   type="number"
-                  value={form.commission}
-                  onChange={(e) => setForm({ ...form, commission: e.target.value })}
+                  value={form.settlement_price}
+                  onChange={(e) => setForm({ ...form, settlement_price: e.target.value })}
                   className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
                 />
               </label>
@@ -228,6 +230,11 @@ export default function ReservationModal({ reservation: res, onClose }: Props) {
                   <option value="ota_transfer">OTA 정산</option>
                 </select>
               </label>
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              수수료 (자동 계산): <span className="text-red-500 font-medium">
+                {formatCurrency(Math.max(0, (parseInt(form.sale_price) || 0) - (parseInt(form.settlement_price) || 0)))}
+              </span>
             </div>
 
             <label className="block">
@@ -346,12 +353,12 @@ export default function ReservationModal({ reservation: res, onClose }: Props) {
               <span className="font-medium">{formatCurrency(res.sale_price)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">수수료</span>
-              <span className="text-red-500">-{formatCurrency(res.commission)}</span>
+              <span className="text-gray-500">정산금액</span>
+              <span className="font-medium">{formatCurrency(res.settlement_price)}</span>
             </div>
             <div className="flex justify-between text-sm border-t pt-2">
-              <span className="font-medium">정산금액</span>
-              <span className="font-bold text-green-600">{formatCurrency(res.settlement_price)}</span>
+              <span className="font-medium">수수료 (판매 − 정산)</span>
+              <span className="font-bold text-red-500">-{formatCurrency(Math.max(0, res.sale_price - res.settlement_price))}</span>
             </div>
             <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
               <CreditCard size={12} />

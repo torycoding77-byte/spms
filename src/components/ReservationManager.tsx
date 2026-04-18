@@ -215,6 +215,7 @@ export default function ReservationManager() {
                 <th className="text-left px-4 py-3 font-medium text-gray-500">투숙기간</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">숙박타입</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-500">결제금액</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-500">정산금액</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">채널</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">상태</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-500"></th>
@@ -223,7 +224,7 @@ export default function ReservationManager() {
             <tbody className="divide-y">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-gray-400">
+                  <td colSpan={9} className="px-4 py-12 text-center text-gray-400">
                     <ClipboardList size={40} className="mx-auto mb-2 text-gray-300" />
                     예약 데이터가 없습니다
                   </td>
@@ -259,6 +260,9 @@ export default function ReservationManager() {
                     </td>
                     <td className="px-4 py-3 text-right font-medium text-gray-900">
                       {formatCurrency(res.sale_price)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-green-600">
+                      {formatCurrency(res.settlement_price)}
                     </td>
                     <td className="px-4 py-3">
                       <span className={cn(
