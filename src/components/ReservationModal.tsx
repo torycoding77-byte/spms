@@ -299,6 +299,12 @@ export default function ReservationModal({ reservation: res, onClose }: Props) {
             </InfoRow>
             <InfoRow label="체크인" value={formatDateTime(res.check_in)} />
             <InfoRow label="체크아웃" value={formatDateTime(res.check_out)} />
+            {res.reserved_at && (
+              <InfoRow label="예약일시" value={formatDateTime(res.reserved_at)} />
+            )}
+            {res.cancelled_at && (
+              <InfoRow label="취소일시" value={formatDateTime(res.cancelled_at)} />
+            )}
           </div>
 
           <div className="flex gap-3">

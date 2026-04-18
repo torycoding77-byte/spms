@@ -5,7 +5,7 @@ import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { HousekeepingLog, CleaningRequest } from '@/types';
 import { cn } from '@/lib/utils';
-import { SprayCan, X, Trash2, Clock, Check, Bell, CheckCheck } from 'lucide-react';
+import { SprayCan, X, Trash2, Clock, Check, Bell, CheckCheck, History } from 'lucide-react';
 import { fetchHousekeepingLogs, deleteHousekeepingLog } from '@/lib/supabase-db-v2';
 
 function formatTime(iso: string) {
@@ -18,7 +18,13 @@ function formatNow() {
 
 export default function HousekeepingCleaner() {
   const { rooms } = useStore();
-  const { adminName } = useAuthStore();
+  const { adminName, role } = useAuthStore();
+  // 관리자는 모든 이력 삭제 가능, 청소팀(housekeeper)은 본인이 등록한 것만 삭제 가능
+  const canDeleteLog = (cleanerName: string) => {
+    if (role === 'admin') return true;
+    if (role === 'housekeeper') return cleanerName === adminName;
+    return false;
+  };
   const [todayLogs, setTodayLogs] = useState<HousekeepingLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -258,57 +264,77 @@ export default function HousekeepingCleaner() {
           const isRequested = requestedRooms.has(room.room_number);
 
           return (
-            <button
+            <div
               key={room.room_number}
-              onClick={() => openConfirm(room.room_number)}
               className={cn(
-                'relative rounded-xl border-2 p-3 transition-all active:scale-95 text-left',
+                'relative rounded-xl border-2 p-3 transition-all text-left',
                 isRequested
                   ? 'bg-orange-50 border-orange-400 text-orange-700 ring-2 ring-orange-300 ring-offset-1'
                   : isCleaned
                     ? 'bg-green-50 border-green-400 text-green-700'
-                    : 'bg-white border-gray-200 text-gray-700 hover:border-pink-300 hover:bg-pink-50'
+                    : 'bg-white border-gray-200 text-gray-700'
               )}
             >
               {/* 요청 뱃지 */}
               {isRequested && (
-                <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
+                <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center z-10">
                   <Bell size={10} className="text-white" />
                 </div>
               )}
-              <div className="flex items-center justify-between">
-                <span className="text-xl font-bold">{room.room_number}</span>
-                {cleanCount > 0 && (
-                  <span className={cn(
-                    'text-[10px] px-1.5 py-0.5 rounded-full font-bold',
-                    cleanCount > 1 ? 'bg-green-500 text-white' : 'bg-green-100 text-green-600'
-                  )}>
-                    {cleanCount}회
-                  </span>
-                )}
-              </div>
-              {isRequested ? (
-                <div className="mt-1.5">
-                  <div className="text-[10px] text-orange-600 font-bold flex items-center gap-1">
-                    <Bell size={8} className="shrink-0" />
-                    청소 요청됨
-                  </div>
-                  <div className="text-[10px] text-orange-400 mt-0.5">탭하여 청소 완료</div>
-                </div>
-              ) : isCleaned ? (
-                <div className="mt-1.5 space-y-0.5">
-                  {roomLogs.map((log) => (
-                    <div key={log.id} className="text-[10px] text-green-600 flex items-center gap-1">
-                      <Check size={8} className="text-green-400 shrink-0" />
-                      {formatTime(log.cleaned_at)}
-                    </div>
-                  ))}
-                  <div className="text-[10px] text-green-400 mt-1">탭하여 추가 청소</div>
-                </div>
-              ) : (
-                <div className="mt-2 text-xs text-gray-400">탭하여 완료</div>
+
+              {/* 이력 보기 버튼 (로그가 있을 때만) */}
+              {isCleaned && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDetailRoom(room.room_number);
+                  }}
+                  className="absolute bottom-1.5 right-1.5 p-1 rounded-md bg-white/80 hover:bg-white text-green-600 hover:text-green-800 shadow-sm z-10"
+                  aria-label="청소 이력 보기"
+                  title="청소 이력 보기"
+                >
+                  <History size={12} />
+                </button>
               )}
-            </button>
+
+              <button
+                onClick={() => openConfirm(room.room_number)}
+                className="w-full text-left active:scale-95 transition-transform"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xl font-bold">{room.room_number}</span>
+                  {cleanCount > 0 && (
+                    <span className={cn(
+                      'text-[10px] px-1.5 py-0.5 rounded-full font-bold',
+                      cleanCount > 1 ? 'bg-green-500 text-white' : 'bg-green-100 text-green-600'
+                    )}>
+                      {cleanCount}회
+                    </span>
+                  )}
+                </div>
+                {isRequested ? (
+                  <div className="mt-1.5">
+                    <div className="text-[10px] text-orange-600 font-bold flex items-center gap-1">
+                      <Bell size={8} className="shrink-0" />
+                      청소 요청됨
+                    </div>
+                    <div className="text-[10px] text-orange-400 mt-0.5">탭하여 청소 완료</div>
+                  </div>
+                ) : isCleaned ? (
+                  <div className="mt-1.5 space-y-0.5">
+                    {roomLogs.map((log) => (
+                      <div key={log.id} className="text-[10px] text-green-600 flex items-center gap-1">
+                        <Check size={8} className="text-green-400 shrink-0" />
+                        {formatTime(log.cleaned_at)}
+                      </div>
+                    ))}
+                    <div className="text-[10px] text-green-400 mt-1">탭하여 추가 청소</div>
+                  </div>
+                ) : (
+                  <div className="mt-2 text-xs text-gray-400">탭하여 완료</div>
+                )}
+              </button>
+            </div>
           );
         })}
       </div>
@@ -393,30 +419,51 @@ export default function HousekeepingCleaner() {
             </div>
 
             <div className="overflow-y-auto p-4 space-y-2" style={{ maxHeight: 'calc(70vh - 130px)' }}>
-              {detailLogs.map((log, i) => (
-                <div key={log.id} className="flex items-center justify-between bg-green-50 rounded-lg px-3 py-2.5 border border-green-200">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-green-600 bg-green-100 w-6 h-6 rounded-full flex items-center justify-center">
-                      {i + 1}
-                    </span>
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{formatTime(log.cleaned_at)}</p>
-                      <p className="text-[10px] text-gray-400">{log.cleaner_name}</p>
+              {detailLogs.map((log, i) => {
+                const isOwn = log.cleaner_name === adminName;
+                const canDelete = canDeleteLog(log.cleaner_name);
+                return (
+                  <div key={log.id} className="flex items-center justify-between bg-green-50 rounded-lg px-3 py-2.5 border border-green-200">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-bold text-green-600 bg-green-100 w-6 h-6 rounded-full flex items-center justify-center">
+                        {i + 1}
+                      </span>
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{formatTime(log.cleaned_at)}</p>
+                        <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                          {log.cleaner_name}
+                          {isOwn && (
+                            <span className="text-[9px] bg-pink-100 text-pink-600 px-1 rounded">본인</span>
+                          )}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <button
-                    disabled={saving === log.id}
-                    onClick={() => handleDeleteLog(log.id)}
-                    className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    {saving === log.id ? (
-                      <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                    {canDelete ? (
+                      <button
+                        disabled={saving === log.id}
+                        onClick={() => {
+                          if (confirm(`${formatTime(log.cleaned_at)} 청소 이력을 삭제하시겠습니까?`)) {
+                            handleDeleteLog(log.id);
+                          }
+                        }}
+                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        aria-label="청소 이력 삭제"
+                        title="청소 이력 삭제"
+                      >
+                        {saving === log.id ? (
+                          <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Trash2 size={14} />
+                        )}
+                      </button>
                     ) : (
-                      <Trash2 size={14} />
+                      <span className="text-[10px] text-gray-300 px-2" title="본인이 등록한 이력만 삭제 가능합니다">
+                        —
+                      </span>
                     )}
-                  </button>
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
 
             <div className="p-4 border-t">

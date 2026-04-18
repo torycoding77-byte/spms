@@ -17,6 +17,8 @@ export interface Reservation {
   guest_vehicle?: string;
   check_in: string;  // ISO datetime
   check_out: string; // ISO datetime
+  reserved_at?: string; // 예약 접수 일시 (OTA에서 예약이 들어온 시점)
+  cancelled_at?: string; // 예약 취소 일시
   sale_price: number;      // 판매금액
   settlement_price: number; // 정산(입금)예정가
   commission: number;       // 수수료

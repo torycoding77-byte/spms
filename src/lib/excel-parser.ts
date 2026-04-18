@@ -56,6 +56,25 @@ function parseKoreanDate(dateStr: string): string {
   return parsed.toISOString();
 }
 
+// 날짜가 비어있으면 undefined 반환 (필수 필드가 아닌 경우용)
+function parseKoreanDateOptional(dateStr: string): string | undefined {
+  if (!dateStr || !dateStr.trim()) return undefined;
+  const cleaned = dateStr.replace(/\./g, '-').trim();
+  const parsed = new Date(cleaned);
+  if (isNaN(parsed.getTime())) return undefined;
+  return parsed.toISOString();
+}
+
+// 예약상태 문자열을 표준 상태로 매핑
+function mapReservationStatus(raw: string): import('@/types').ReservationStatus {
+  if (!raw) return 'confirmed';
+  if (/취소|cancel/i.test(raw)) return 'cancelled';
+  if (/노쇼|no.?show/i.test(raw)) return 'no_show';
+  if (/체크아웃|퇴실완료/i.test(raw)) return 'checked_out';
+  if (/체크인|입실완료|이용중/i.test(raw)) return 'checked_in';
+  return 'confirmed';
+}
+
 function safeNumber(val: unknown): number {
   if (typeof val === 'number') return val;
   if (typeof val === 'string') {
@@ -99,6 +118,12 @@ const yanoljaParser: ChannelParser = {
       const roomTypeName = safeString(row['객실타입'] || row['객실명'] || row['상품명']);
       const salePrice = safeNumber(row['판매금액'] || row['판매가'] || row['결제금액'] || 0);
       const settlementPrice = safeNumber(row['입금예정가'] || row['정산금액'] || row['정산예정금액'] || 0);
+      const rawStatus = safeString(row['예약상태'] || row['상태'] || '');
+      const reservedAt = parseKoreanDateOptional(safeString(row['예약일시'] || row['예약시간']));
+      const cancelledAt = parseKoreanDateOptional(
+        safeString(row['예약취소일시'] || row['제휴점 취소일시'] || row['취소일시'])
+      );
+      const status = mapReservationStatus(rawStatus);
 
       results.push({
         id: generateId(),
@@ -112,11 +137,13 @@ const yanoljaParser: ChannelParser = {
         guest_vehicle: safeString(row['차량번호'] || row['차량'] || '') || undefined,
         check_in: parseKoreanDate(safeString(row['입실일시'] || row['체크인'] || row['입실일'])),
         check_out: parseKoreanDate(safeString(row['퇴실일시'] || row['체크아웃'] || row['퇴실일'])),
+        reserved_at: reservedAt,
+        cancelled_at: cancelledAt,
         sale_price: salePrice,
         settlement_price: settlementPrice,
         commission: salePrice - settlementPrice,
         payment_method: 'ota_transfer',
-        status: 'confirmed',
+        status,
         memo: `야놀자 - ${roomTypeName}`,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -154,9 +181,8 @@ const yeogiParser: ChannelParser = {
       const externalId = safeString(row['통합예약번호'] || row['예약번호'] || row['NO']);
       if (!externalId) continue;
 
-      // 예약취소 건 제외
-      const status = safeString(row['진행상태'] || row['상태'] || '');
-      if (/취소|cancel/i.test(status)) continue;
+      const rawStatus = safeString(row['진행상태'] || row['상태'] || '');
+      const status = mapReservationStatus(rawStatus);
 
       const roomTypeName = safeString(row['객실타입'] || row['객실명'] || row['상품명']);
       const salePrice = safeNumber(row['판매가'] || row['판매금액'] || row['결제금액'] || 0);
@@ -175,6 +201,14 @@ const yeogiParser: ChannelParser = {
         checkOut = parseKoreanDate(safeString(row['체크아웃'] || row['퇴실일'] || row['이용종료'] || ''));
       }
 
+      // 예약시간 (예약 접수일시)
+      const reservedAt = parseKoreanDateOptional(
+        safeString(row['예약시간'] || row['예약일시'] || '')
+      );
+      const cancelledAt = parseKoreanDateOptional(
+        safeString(row['취소일시'] || row['예약취소일시'] || '')
+      );
+
       // 이동수단에서 차량 여부 확인
       const vehicle = safeString(row['이동수단'] || row['차량번호'] || row['차량'] || '');
 
@@ -190,11 +224,13 @@ const yeogiParser: ChannelParser = {
         guest_vehicle: /차량/i.test(vehicle) ? vehicle : undefined,
         check_in: checkIn,
         check_out: checkOut,
+        reserved_at: reservedAt,
+        cancelled_at: cancelledAt,
         sale_price: salePrice,
         settlement_price: settlementPrice,
         commission: salePrice - settlementPrice,
         payment_method: 'ota_transfer',
-        status: 'confirmed',
+        status,
         memo: `여기어때 - ${roomTypeName}`,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

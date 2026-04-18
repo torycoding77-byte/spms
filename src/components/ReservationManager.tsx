@@ -9,6 +9,7 @@ import {
 } from '@/lib/utils';
 import { Search, Filter, Plus, MoreHorizontal, ClipboardList } from 'lucide-react';
 import ReservationModal from './ReservationModal';
+import WalkinModal from './WalkinModal';
 
 const STATUS_OPTIONS: { value: '' | ReservationStatus; label: string }[] = [
   { value: '', label: '모든 상태' },
@@ -41,6 +42,7 @@ export default function ReservationManager() {
   const [sourceFilter, setSourceFilter] = useState<'' | ReservationSource>('');
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
   const [selectedRes, setSelectedRes] = useState<Reservation | null>(null);
+  const [showNewModal, setShowNewModal] = useState(false);
 
   const dateFiltered = useMemo(() => {
     if (!dateFilter) return reservations;
@@ -89,6 +91,13 @@ export default function ReservationManager() {
           <p className="text-sm text-gray-500 mt-1">예약 생성, 조회 및 상태 관리</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowNewModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 mr-2"
+          >
+            <Plus size={16} />
+            현장 예약 등록
+          </button>
           <button
             onClick={() => {
               const d = new Date(dateFilter);
@@ -208,7 +217,9 @@ export default function ReservationManager() {
                     onClick={() => setSelectedRes(res)}
                   >
                     <td className="px-4 py-3 font-medium text-gray-900">{res.guest_name}</td>
-                    <td className="px-4 py-3 text-gray-600">{res.room_number}호</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {res.room_number ? `${res.room_number}호` : <span className="text-orange-500 text-xs">미배정</span>}
+                    </td>
                     <td className="px-4 py-3 text-gray-600">
                       {formatDate(res.check_in)} ~ {formatDate(res.check_out)}
                     </td>
@@ -263,6 +274,14 @@ export default function ReservationManager() {
         <ReservationModal
           reservation={selectedRes}
           onClose={() => setSelectedRes(null)}
+        />
+      )}
+
+      {/* New Walk-in Reservation Modal */}
+      {showNewModal && (
+        <WalkinModal
+          initialCheckIn={`${dateFilter}T17:00`}
+          onClose={() => setShowNewModal(false)}
         />
       )}
     </div>

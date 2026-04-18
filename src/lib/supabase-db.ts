@@ -14,6 +14,7 @@ export async function fetchReservations(): Promise<Reservation[]> {
   return ((data || []) as unknown as Reservation[]).map((r) => ({
     ...r,
     stay_type: r.stay_type || 'nightly',
+    reserved_at: r.reserved_at ?? r.created_at,
   }));
 }
 
@@ -41,10 +42,26 @@ export async function upsertReservations(
     updated_at: new Date().toISOString(),
   }));
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('reservations')
     .upsert(rows, { onConflict: 'external_id' })
     .select();
+
+  // reserved_at/cancelled_at 컬럼이 DB에 없는 경우(migration_v4 미적용) fallback
+  if (error && /reserved_at|cancelled_at|column .* does not exist/i.test(error.message)) {
+    const safeRows = rows.map((r) => {
+      const copy = { ...r } as Record<string, unknown>;
+      delete copy.reserved_at;
+      delete copy.cancelled_at;
+      return copy;
+    });
+    const retry = await supabase
+      .from('reservations')
+      .upsert(safeRows, { onConflict: 'external_id' })
+      .select();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) throw error;
   return (data || []) as unknown as Reservation[];

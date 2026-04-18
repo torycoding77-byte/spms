@@ -125,7 +125,6 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       const saved = await upsertReservations(newReservations);
       set((state) => {
-        const existingIds = new Set(state.reservations.map((r) => r.id));
         const merged = [...state.reservations];
         for (const r of saved) {
           const idx = merged.findIndex((m) => m.external_id === r.external_id);
@@ -139,6 +138,7 @@ export const useStore = create<AppState>((set, get) => ({
       });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Failed to save reservations' });
+      throw err; // 호출자가 실패를 인지할 수 있도록 재전파
     }
   },
 
