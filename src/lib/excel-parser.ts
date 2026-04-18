@@ -136,6 +136,14 @@ interface ChannelParser {
   parse: (workbook: XLSX.WorkBook) => Partial<Reservation>[];
 }
 
+// 출처 컬럼 값 → ReservationSource 매핑
+function mapSource(raw: string, defaultSource: ReservationSource): ReservationSource {
+  if (/야놀자|yanolja/i.test(raw)) return 'yanolja';
+  if (/여기어때|yeogi/i.test(raw)) return 'yeogi';
+  if (/현장|walkin|walk-in/i.test(raw)) return 'walkin';
+  return defaultSource;
+}
+
 const yanoljaParser: ChannelParser = {
   name: '야놀자',
   source: 'yanolja',
@@ -143,14 +151,17 @@ const yanoljaParser: ChannelParser = {
     /야놀자|yanolja/i.test(fileName) ||
     headers.includes('NOL') ||
     headers.includes('입금예정가') ||
-    headers.includes('판매금액'),
+    headers.includes('판매금액') ||
+    // pms_recent 포맷 등 단순 내보내기
+    (headers.includes('금액') && headers.includes('정산금액')),
   parse: (workbook) => {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const { rows } = buildRows(sheet, (rowStr) =>
       rowStr.includes('NOL 숙소 예약번호') ||
       rowStr.includes('판매금액') ||
       rowStr.includes('입금예정가') ||
-      (rowStr.includes('예약번호') && rowStr.includes('예약자'))
+      (rowStr.includes('금액') && rowStr.includes('정산금액')) ||
+      (rowStr.includes('예약번호') && (rowStr.includes('예약자') || rowStr.includes('고객명')))
     );
     const results: Partial<Reservation>[] = [];
 
@@ -158,8 +169,8 @@ const yanoljaParser: ChannelParser = {
       const externalId = safeString(row['NOL 숙소 예약번호'] || row['예약번호'] || row['NO']);
       if (!externalId) continue;
 
-      const roomTypeName = safeString(row['객실타입'] || row['객실명'] || row['상품명']);
-      const salePrice = safeNumber(row['판매금액'] || row['판매가'] || row['결제금액'] || 0);
+      const roomTypeName = safeString(row['객실타입'] || row['객실명'] || row['객실'] || row['상품명']);
+      const salePrice = safeNumber(row['판매금액'] || row['금액'] || row['판매가'] || row['결제금액'] || 0);
       const settlementPrice = safeNumber(row['입금예정가'] || row['정산금액'] || row['정산예정금액'] || 0);
       const rawStatus = safeString(row['예약상태'] || row['상태'] || '');
       const reservedAt = parseKoreanDateOptional(safeString(row['예약일시'] || row['예약시간']));
@@ -167,11 +178,14 @@ const yanoljaParser: ChannelParser = {
         safeString(row['예약취소일시'] || row['제휴점 취소일시'] || row['취소일시'])
       );
       const status = mapReservationStatus(rawStatus);
+      // '출처' 컬럼으로 per-row 채널 결정 (pms_recent 등 통합 파일)
+      const sourceRaw = safeString(row['출처'] || row['채널']);
+      const source = mapSource(sourceRaw, 'yanolja');
 
       results.push({
         id: generateId(),
         external_id: externalId,
-        source: 'yanolja',
+        source,
         room_number: extractRoomNumber(row),
         room_type: normalizeRoomType(roomTypeName),
         stay_type: detectStayType(row),
@@ -185,9 +199,9 @@ const yanoljaParser: ChannelParser = {
         sale_price: salePrice,
         settlement_price: settlementPrice,
         commission: Math.max(0, salePrice - settlementPrice),
-        payment_method: 'ota_transfer',
+        payment_method: source === 'walkin' ? 'cash' : 'ota_transfer',
         status,
-        memo: `야놀자 - ${roomTypeName}`,
+        memo: roomTypeName ? `${sourceRaw || '야놀자'} - ${roomTypeName}` : sourceRaw || '야놀자',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
@@ -293,7 +307,8 @@ export function parseExcelFile(buffer: ArrayBuffer, fileName: string): ParseResu
   const workbook = XLSX.read(buffer, { type: 'array' });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const { headers, rows: sampleRows } = buildRows(sheet, (rowStr) =>
-    rowStr.includes('예약번호') || rowStr.includes('NOL') || rowStr.includes('통합예약번호') || rowStr.includes('판매금액')
+    rowStr.includes('예약번호') || rowStr.includes('NOL') || rowStr.includes('통합예약번호') ||
+    rowStr.includes('판매금액') || (rowStr.includes('금액') && rowStr.includes('정산금액'))
   );
   const headerStr = headers.join(',');
   const totalRows = sampleRows.length;
