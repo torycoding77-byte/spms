@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { Reservation, ReservationStatus, ReservationSource } from '@/types';
 import {
-  formatCurrency, formatDate, getSourceLabel,
+  formatCurrency, formatDate, formatDateTime, getSourceLabel,
   getStatusLabel, getStatusColor, cn
 } from '@/lib/utils';
 import { Search, Filter, Plus, MoreHorizontal, ClipboardList, Trash2 } from 'lucide-react';
@@ -211,6 +211,7 @@ export default function ReservationManager() {
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">고객명</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500">예약일시</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">객실</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">투숙기간</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">숙박타입</th>
@@ -224,7 +225,7 @@ export default function ReservationManager() {
             <tbody className="divide-y">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-gray-400">
+                  <td colSpan={10} className="px-4 py-12 text-center text-gray-400">
                     <ClipboardList size={40} className="mx-auto mb-2 text-gray-300" />
                     예약 데이터가 없습니다
                   </td>
@@ -237,6 +238,9 @@ export default function ReservationManager() {
                     onClick={() => setSelectedRes(res)}
                   >
                     <td className="px-4 py-3 font-medium text-gray-900">{res.guest_name}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                      {res.reserved_at ? formatDateTime(res.reserved_at) : <span className="text-gray-300">—</span>}
+                    </td>
                     <td className="px-4 py-3 text-gray-600">
                       {res.room_number ? `${res.room_number}호` : <span className="text-orange-500 text-xs">미배정</span>}
                     </td>
