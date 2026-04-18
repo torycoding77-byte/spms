@@ -51,10 +51,20 @@ export default function Timeline() {
     });
   }, [reservations, dates]);
 
-  // 미배정 예약 (객실 번호 없음)
-  const unassigned = useMemo(() =>
-    reservations.filter((r) => !r.room_number && r.status !== 'cancelled'),
-  [reservations]);
+  // 미배정 예약 (객실 번호 없음) — 현재 보고 있는 날짜 범위의 체크인 날짜인 것만 표시
+  const unassigned = useMemo(() => {
+    const start = new Date(dates[0]);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(dates[dates.length - 1]);
+    end.setDate(end.getDate() + 1);
+    end.setHours(0, 0, 0, 0);
+    return reservations.filter((r) => {
+      if (r.room_number) return false;
+      if (r.status === 'cancelled') return false;
+      const checkIn = new Date(r.check_in);
+      return checkIn >= start && checkIn < end;
+    });
+  }, [reservations, dates]);
 
   const getReservationStyle = (res: Reservation) => {
     const dayStart = new Date(dates[0]);
