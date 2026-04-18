@@ -8,7 +8,9 @@ import { ChevronLeft, ChevronRight, AlertCircle, GripVertical, Wand2 } from 'luc
 import ReservationModal from './ReservationModal';
 import WalkinModal from './WalkinModal';
 
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
+// 타임라인은 매일 8시에 시작 (호텔 영업일 기준)
+const START_HOUR = 8;
+const HOURS = Array.from({ length: 24 }, (_, i) => (i + START_HOUR) % 24);
 
 interface DragInfo {
   reservationId: string;
@@ -39,12 +41,13 @@ export default function Timeline() {
   const dates = useMemo(() => getDaysInRange(selectedDate, viewDays), [selectedDate, viewDays]);
 
   const filteredReservations = useMemo(() => {
+    // 8시부터 시작하는 호텔 영업일 기준 필터
     const start = new Date(dates[0]);
-    start.setHours(0, 0, 0, 0);
+    start.setHours(START_HOUR, 0, 0, 0);
     const end = new Date(dates[dates.length - 1]);
     end.setDate(end.getDate() + 1);
+    end.setHours(START_HOUR, 0, 0, 0);
 
-    // 취소는 삭제 처리되므로 제외 (방어적)
     return reservations.filter((r) => {
       if (r.status === 'cancelled') return false;
       const checkIn = new Date(r.check_in);
@@ -54,13 +57,12 @@ export default function Timeline() {
   }, [reservations, dates]);
 
   // 미배정 예약 (객실 번호 없음) — 현재 보고 있는 날짜 범위의 체크인 날짜인 것만 표시
-  // 취소 건은 배정할 필요가 없으므로 제외
   const unassigned = useMemo(() => {
     const start = new Date(dates[0]);
-    start.setHours(0, 0, 0, 0);
+    start.setHours(START_HOUR, 0, 0, 0);
     const end = new Date(dates[dates.length - 1]);
     end.setDate(end.getDate() + 1);
-    end.setHours(0, 0, 0, 0);
+    end.setHours(START_HOUR, 0, 0, 0);
     return reservations.filter((r) => {
       if (r.room_number) return false;
       if (r.status === 'cancelled') return false;
@@ -71,7 +73,7 @@ export default function Timeline() {
 
   const getReservationStyle = (res: Reservation) => {
     const dayStart = new Date(dates[0]);
-    dayStart.setHours(0, 0, 0, 0);
+    dayStart.setHours(START_HOUR, 0, 0, 0);
     const totalHours = viewDays * 24;
     const checkIn = new Date(res.check_in);
     const checkOut = new Date(res.check_out);
@@ -128,7 +130,7 @@ export default function Timeline() {
     const snappedHour = Math.round(newStartHour * 2) / 2; // 30분 단위 스냅
 
     const dayStart = new Date(dates[0]);
-    dayStart.setHours(0, 0, 0, 0);
+    dayStart.setHours(START_HOUR, 0, 0, 0);
     const newCheckIn = new Date(dayStart.getTime() + snappedHour * 60 * 60 * 1000);
     const newCheckOut = new Date(newCheckIn.getTime() + durationMs);
 
@@ -322,13 +324,13 @@ export default function Timeline() {
               </div>
               <div className="flex-1 flex">
                 {dates.map((date) =>
-                  HOURS.map((hour) => (
+                  HOURS.map((hour, hourIdx) => (
                     <div
                       key={`${date}-${hour}`}
                       style={{ width: `${hourWidth}%` }}
                       className="text-center text-xs text-gray-500 py-2 border-r border-gray-200"
                     >
-                      {hour === 0 ? (
+                      {hourIdx === 0 ? (
                         <span className="font-semibold text-gray-700">
                           {new Date(date).getMonth() + 1}/{new Date(date).getDate()}
                         </span>

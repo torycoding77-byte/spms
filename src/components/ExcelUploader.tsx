@@ -11,7 +11,7 @@ import { showToast } from './Toast';
 type Step = 'upload' | 'preview' | 'done';
 
 export default function ExcelUploader() {
-  const { addReservations, reservations, deleteReservationsByExternalIds } = useStore();
+  const { addReservations, reservations } = useStore();
   const [step, setStep] = useState<Step>('upload');
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [error, setError] = useState('');
@@ -19,29 +19,31 @@ export default function ExcelUploader() {
   const [saving, setSaving] = useState(false);
 
   // 파싱된 예약을 분류:
-  //   newly        : 신규 (DB에 없음, 취소 아님) → 저장
-  //   cancelDelete : 기존 DB 레코드가 엑셀에서 취소됨 → 삭제
-  //   skipped      : 이미 존재하는 활성 예약 (변경 없음) / 신규지만 취소 상태 → 무시
+  //   newly        : 신규 (DB에 없음) → 저장 (취소 상태도 이력 보존을 위해 저장)
+  //   cancelUpdate : 기존 DB 활성 예약이 엑셀에서 취소됨 → status=cancelled 업데이트
+  //   skipped      : 이미 존재하는 활성 예약 (변경 없음) → 무시
   const partition = parseResult ? parseResult.reservations.reduce<{
     newly: typeof parseResult.reservations;
     skipped: typeof parseResult.reservations;
-    cancelDelete: typeof parseResult.reservations;
+    cancelUpdate: typeof parseResult.reservations;
   }>(
     (acc, r) => {
       const existing = r.external_id
         ? reservations.find((x) => x.external_id === r.external_id)
         : undefined;
-      if (r.status === 'cancelled') {
-        if (existing) acc.cancelDelete.push(r);
-        else acc.skipped.push(r); // 신규이면서 취소 → 저장할 필요 없음
+      if (!existing) {
+        acc.newly.push(r);
         return acc;
       }
-      if (!existing) acc.newly.push(r);
-      else acc.skipped.push(r);
+      if (r.status === 'cancelled' && existing.status !== 'cancelled') {
+        acc.cancelUpdate.push(r);
+      } else {
+        acc.skipped.push(r);
+      }
       return acc;
     },
-    { newly: [], skipped: [], cancelDelete: [] }
-  ) : { newly: [], skipped: [], cancelDelete: [] };
+    { newly: [], skipped: [], cancelUpdate: [] }
+  ) : { newly: [], skipped: [], cancelUpdate: [] };
 
   const processFile = useCallback(async (file: File) => {
     setError('');
@@ -63,34 +65,24 @@ export default function ExcelUploader() {
 
   const handleConfirm = async () => {
     if (!parseResult) return;
-    const toSave = partition.newly;
-    const toDeleteIds = partition.cancelDelete
-      .map((r) => r.external_id)
-      .filter((x): x is string => Boolean(x));
-
-    if (toSave.length === 0 && toDeleteIds.length === 0) {
+    const toSave = [...partition.newly, ...partition.cancelUpdate];
+    if (toSave.length === 0) {
       showToast({
         type: 'info',
         title: '변경할 데이터 없음',
-        message: '신규 등록 또는 취소 처리할 예약이 없습니다.',
+        message: '모든 예약이 이미 등록되어 있습니다.',
       });
       setStep('done');
       return;
     }
-
     setSaving(true);
     try {
-      if (toDeleteIds.length > 0) {
-        await deleteReservationsByExternalIds(toDeleteIds);
-      }
-      if (toSave.length > 0) {
-        await addReservations(toSave as Reservation[]);
-      }
+      await addReservations(toSave as Reservation[]);
       setStep('done');
       showToast({
         type: 'success',
         title: '업로드 완료',
-        message: `신규 ${partition.newly.length}건${toDeleteIds.length > 0 ? ` · 취소 삭제 ${toDeleteIds.length}건` : ''}${partition.skipped.length > 0 ? ` · 건너뜀 ${partition.skipped.length}건` : ''}`,
+        message: `신규 ${partition.newly.length}건${partition.cancelUpdate.length > 0 ? ` · 취소 처리 ${partition.cancelUpdate.length}건` : ''}${partition.skipped.length > 0 ? ` · 건너뜀 ${partition.skipped.length}건` : ''}`,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : '저장 실패');
@@ -221,8 +213,8 @@ export default function ExcelUploader() {
             {/* 중복 체크 결과 */}
             <div className="grid grid-cols-3 gap-3 mb-4">
               <StatBox label="신규 등록 예정" value={`${partition.newly.length}건`} color="text-green-600" />
-              <StatBox label="취소로 삭제" value={`${partition.cancelDelete.length}건`}
-                color={partition.cancelDelete.length > 0 ? 'text-red-500' : 'text-gray-400'} />
+              <StatBox label="취소 처리" value={`${partition.cancelUpdate.length}건`}
+                color={partition.cancelUpdate.length > 0 ? 'text-red-500' : 'text-gray-400'} />
               <StatBox label="중복 (건너뜀)" value={`${partition.skipped.length}건`}
                 color={partition.skipped.length > 0 ? 'text-gray-500' : 'text-gray-400'} />
             </div>
@@ -232,9 +224,9 @@ export default function ExcelUploader() {
                 ℹ️ 이미 등록된 예약 <b>{partition.skipped.length}건</b>은 기존 데이터 보호를 위해 건너뜁니다.
               </div>
             )}
-            {partition.cancelDelete.length > 0 && (
+            {partition.cancelUpdate.length > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-2">
-                🗑️ <b>{partition.cancelDelete.length}건</b>이 엑셀에서 취소 상태 → 기존 예약을 <b>완전 삭제</b>합니다.
+                🚫 <b>{partition.cancelUpdate.length}건</b>이 엑셀에서 취소 상태 → 기존 예약을 <b>취소로 상태 변경</b>합니다.
               </div>
             )}
             {parseResult.unassigned > 0 && (
@@ -265,10 +257,10 @@ export default function ExcelUploader() {
                 <tbody className="divide-y">
                   {parseResult.reservations.map((r, i) => {
                     const isSkipped = partition.skipped.includes(r);
-                    const isCancelDelete = partition.cancelDelete.includes(r);
+                    const isCancelUpdate = partition.cancelUpdate.includes(r);
                     const rowClass = isSkipped
                       ? 'bg-gray-50/70 opacity-60'
-                      : isCancelDelete
+                      : isCancelUpdate
                         ? 'bg-red-50/50'
                         : !r.room_number
                           ? 'bg-orange-50/50'
@@ -279,8 +271,8 @@ export default function ExcelUploader() {
                       <td className="px-3 py-2">
                         {isSkipped ? (
                           <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-medium">건너뜀</span>
-                        ) : isCancelDelete ? (
-                          <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-medium">삭제</span>
+                        ) : isCancelUpdate ? (
+                          <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-medium">취소</span>
                         ) : (
                           <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">신규</span>
                         )}
@@ -330,7 +322,7 @@ export default function ExcelUploader() {
               {saving ? (
                 <><FileSpreadsheet size={16} className="animate-spin" /> 저장 중...</>
               ) : (
-                <><Save size={16} /> 신규 {partition.newly.length}건 저장{partition.cancelDelete.length > 0 ? ` · 취소 ${partition.cancelDelete.length}건 삭제` : ''}</>
+                <><Save size={16} /> 신규 {partition.newly.length}건 저장{partition.cancelUpdate.length > 0 ? ` · 취소 처리 ${partition.cancelUpdate.length}건` : ''}</>
               )}
             </button>
           </div>
