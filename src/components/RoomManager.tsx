@@ -237,7 +237,7 @@ export default function RoomManager() {
 
               {room.last_cleaned && (
                 <p className="text-[10px] text-gray-400 mt-2 text-center">
-                  마지막 청소: {new Date(room.last_cleaned).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  마지막 청소: {new Date(room.last_cleaned).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}
                 </p>
               )}
             </div>

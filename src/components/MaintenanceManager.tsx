@@ -221,9 +221,9 @@ export default function MaintenanceManager() {
                     </div>
                     <p className="text-sm text-gray-600 mt-1">{log.description}</p>
                     <p className="text-xs text-gray-400 mt-1">
-                      {new Date(log.reported_at).toLocaleString('ko-KR')}
+                      {new Date(log.reported_at).toLocaleString('ko-KR', { hour12: false })}
                       {log.cost > 0 && ` | 비용: ${formatCurrency(log.cost)}`}
-                      {log.resolved_at && ` | 완료: ${new Date(log.resolved_at).toLocaleString('ko-KR')}`}
+                      {log.resolved_at && ` | 완료: ${new Date(log.resolved_at).toLocaleString('ko-KR', { hour12: false })}`}
                     </p>
                   </div>
                 </div>

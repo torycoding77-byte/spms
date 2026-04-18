@@ -302,10 +302,10 @@ export default function ExcelUploader() {
                         )}
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-500">
-                        {r.check_in ? new Date(r.check_in).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                        {r.check_in ? new Date(r.check_in).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-500">
-                        {r.check_out ? new Date(r.check_out).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                        {r.check_out ? new Date(r.check_out).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}
                       </td>
                       <td className="px-3 py-2 text-right">{formatCurrency(r.sale_price || 0)}</td>
                       <td className="px-3 py-2 text-right text-green-600">{formatCurrency(r.settlement_price || 0)}</td>

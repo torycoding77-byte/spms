@@ -9,11 +9,11 @@ import { SprayCan, X, Trash2, Clock, Check, Bell, CheckCheck, History } from 'lu
 import { fetchHousekeepingLogs, deleteHousekeepingLog } from '@/lib/supabase-db-v2';
 
 function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 function formatNow() {
-  return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 }
 
 export default function HousekeepingCleaner() {
@@ -238,7 +238,7 @@ export default function HousekeepingCleaner() {
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-bold text-orange-700">{req.room_number}호</span>
                   <span className="text-[10px] bg-orange-200 text-orange-700 px-1.5 py-0.5 rounded-full font-medium">
-                    {new Date(req.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(req.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
                   </span>
                 </div>
                 <p className="text-xs text-orange-600 mt-0.5 truncate">{req.message}</p>

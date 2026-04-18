@@ -341,7 +341,7 @@ export default function HousekeepingDashboard() {
                             const d = new Date(log.cleaned_at);
                             const hours = d.getHours() + d.getMinutes() / 60;
                             const pct = Math.max(0, Math.min(100, ((hours - TIMELINE_START) / TIMELINE_SPAN) * 100));
-                            const timeStr = d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+                            const timeStr = d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
                             return (
                               <div
                                 key={log.id}
