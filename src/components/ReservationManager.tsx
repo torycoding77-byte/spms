@@ -4,8 +4,8 @@ import { useState, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { Reservation, ReservationStatus, ReservationSource } from '@/types';
 import {
-  formatCurrency, formatDate, formatDateTime, getSourceLabel,
-  getStatusLabel, getStatusColor, cn
+  formatCurrency, formatDate, formatDateTime, formatDateKey, todayKey,
+  getSourceLabel, getStatusLabel, getStatusColor, cn
 } from '@/lib/utils';
 import { Search, Filter, Plus, MoreHorizontal, ClipboardList, Trash2 } from 'lucide-react';
 import ReservationModal from './ReservationModal';
@@ -121,7 +121,7 @@ export default function ReservationManager() {
             onClick={() => {
               const d = new Date(dateFilter);
               d.setDate(d.getDate() - 1);
-              setDateFilter(d.toISOString().split('T')[0]);
+              setDateFilter(formatDateKey(d));
             }}
             className="p-1.5 hover:bg-gray-100 rounded text-gray-500"
           >
@@ -137,14 +137,14 @@ export default function ReservationManager() {
             onClick={() => {
               const d = new Date(dateFilter);
               d.setDate(d.getDate() + 1);
-              setDateFilter(d.toISOString().split('T')[0]);
+              setDateFilter(formatDateKey(d));
             }}
             className="p-1.5 hover:bg-gray-100 rounded text-gray-500"
           >
             &gt;
           </button>
           <button
-            onClick={() => setDateFilter(new Date().toISOString().split('T')[0])}
+            onClick={() => setDateFilter(todayKey())}
             className="text-sm text-pink-600 hover:text-pink-700 font-medium ml-1"
           >
             오늘

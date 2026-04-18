@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { HousekeepingLog, CleaningRequest } from '@/types';
-import { cn } from '@/lib/utils';
+import { cn, todayKey } from '@/lib/utils';
 import { SprayCan, X, Trash2, Clock, Check, Bell, CheckCheck, History } from 'lucide-react';
 import { fetchHousekeepingLogs, deleteHousekeepingLog } from '@/lib/supabase-db-v2';
 
@@ -36,7 +36,7 @@ export default function HousekeepingCleaner() {
   // 청소 요청 목록
   const [requests, setRequests] = useState<CleaningRequest[]>([]);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayKey();
 
   const loadRequests = useCallback(async () => {
     try {

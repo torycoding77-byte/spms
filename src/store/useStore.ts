@@ -85,7 +85,11 @@ export const useStore = create<AppState>((set, get) => ({
   commissionRates: [],
   loading: true,
   error: null,
-  selectedDate: new Date().toISOString().split('T')[0],
+  selectedDate: (() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  })(),
   selectedRoom: null,
   selectedReservation: null,
   sidebarOpen: true,
@@ -331,7 +335,9 @@ export const useStore = create<AppState>((set, get) => ({
     if (!rate) return 0;
     // 프로모션 기간이면 프로모션 수수료율 적용
     if (rate.promo_rate_percent && rate.promo_start && rate.promo_end) {
-      const now = new Date().toISOString().split('T')[0];
+      const d = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const now = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
       if (now >= rate.promo_start && now <= rate.promo_end) {
         return rate.promo_rate_percent;
       }

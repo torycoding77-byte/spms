@@ -3,7 +3,7 @@
 import { useMemo, useState, useRef, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { Reservation } from '@/types';
-import { cn, getSourceColor, getSourceLabel, getStatusLabel, formatCurrency, formatTime, getDaysInRange } from '@/lib/utils';
+import { cn, getSourceColor, getSourceLabel, getStatusLabel, formatCurrency, formatTime, getDaysInRange, formatDateKey, todayKey } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, AlertCircle, GripVertical, Wand2 } from 'lucide-react';
 import ReservationModal from './ReservationModal';
 import WalkinModal from './WalkinModal';
@@ -96,7 +96,7 @@ export default function Timeline() {
   const navigateDate = (dir: number) => {
     const d = new Date(selectedDate);
     d.setDate(d.getDate() + dir);
-    setSelectedDate(d.toISOString().split('T')[0]);
+    setSelectedDate(formatDateKey(d));
   };
 
   // 드래그앤드롭 핸들러
@@ -285,7 +285,7 @@ export default function Timeline() {
               <ChevronRight size={18} />
             </button>
             <button
-              onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
+              onClick={() => setSelectedDate(todayKey())}
               className="text-sm text-pink-600 hover:text-pink-700 font-medium ml-2"
             >
               오늘

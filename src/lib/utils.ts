@@ -84,11 +84,21 @@ export function cn(...classes: (string | boolean | undefined | null)[]): string 
   return classes.filter(Boolean).join(' ');
 }
 
+// Date → "YYYY-MM-DD" (로컬 시간대 기준). toISOString은 UTC라 자정 근처엔 하루씩 밀림.
+export function formatDateKey(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+export function todayKey(): string {
+  return formatDateKey(new Date());
+}
+
 export function getDaysInRange(start: string, days: number): string[] {
   const result: string[] = [];
   const d = new Date(start);
   for (let i = 0; i < days; i++) {
-    result.push(d.toISOString().split('T')[0]);
+    result.push(formatDateKey(d));
     d.setDate(d.getDate() + 1);
   }
   return result;

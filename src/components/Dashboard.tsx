@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useStore } from '@/store/useStore';
-import { formatCurrency, getDaysInRange } from '@/lib/utils';
+import { formatCurrency, getDaysInRange, formatDateKey } from '@/lib/utils';
 import {
   TrendingUp, TrendingDown, BedDouble, DollarSign,
   CreditCard, Banknote, Building2
@@ -22,7 +22,7 @@ export default function Dashboard() {
   const weeklyData = useMemo(() => {
     const d = new Date(selectedDate);
     d.setDate(d.getDate() - 6);
-    const dates = getDaysInRange(d.toISOString().split('T')[0], 7);
+    const dates = getDaysInRange(formatDateKey(d), 7);
     return dates.map((date) => {
       const summary = getDailySummary(date);
       return {
@@ -36,7 +36,7 @@ export default function Dashboard() {
 
   const sourceData = useMemo(() => {
     const dayRes = reservations.filter((r) => {
-      const checkIn = new Date(r.check_in).toISOString().split('T')[0];
+      const checkIn = formatDateKey(new Date(r.check_in));
       return checkIn === selectedDate && r.status !== 'cancelled';
     });
     const sources = [

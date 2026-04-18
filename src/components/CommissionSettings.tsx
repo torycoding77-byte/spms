@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { CommissionRate, ReservationSource } from '@/types';
 import { useStore } from '@/store/useStore';
-import { getSourceLabel, cn } from '@/lib/utils';
+import { getSourceLabel, cn, todayKey } from '@/lib/utils';
 import { Save, Percent, Tag, RefreshCw } from 'lucide-react';
 import { showToast } from './Toast';
 
@@ -55,7 +55,7 @@ export default function CommissionSettings() {
 
   const isPromoActive = (rate: CommissionRate) => {
     if (!rate.promo_start || !rate.promo_end || !rate.promo_rate_percent) return false;
-    const now = new Date().toISOString().split('T')[0];
+    const now = todayKey();
     return now >= rate.promo_start && now <= rate.promo_end;
   };
 
