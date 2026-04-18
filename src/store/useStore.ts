@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Reservation, Room, Expense, VipGuest, DailySummary, RoomStatus, CommissionRate, ReservationSource, RoomType } from '@/types';
 import {
   fetchReservations, upsertReservations, updateReservationDb, deleteReservationDb,
+  deleteReservationsByExternalIds, deleteAllCancelledReservations,
   batchAssignRooms as batchAssignRoomsDb,
   fetchRooms, updateRoomDb,
   fetchExpenses, insertExpenseDb, deleteExpenseDb,
@@ -41,6 +42,7 @@ interface AppState {
   upsertReservation: (reservation: Reservation) => Promise<void>;
   updateReservation: (id: string, updates: Partial<Reservation>) => Promise<void>;
   deleteReservation: (id: string) => Promise<void>;
+  deleteReservationsByExternalIds: (externalIds: string[]) => Promise<number>;
 
   // Batch room assignment
   batchAssignRooms: (assignments: { id: string; room_number: string }[]) => Promise<void>;
@@ -98,6 +100,9 @@ export const useStore = create<AppState>((set, get) => ({
           new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
         ]);
 
+      // 기존에 남아있는 취소 예약은 자동 삭제 (정책: 취소 = 완전 삭제)
+      timeout(deleteAllCancelledReservations(), 3000, 0).catch(() => 0);
+
       const [reservations, rooms, expenses, vipGuests, commissionRates] = await Promise.all([
         timeout(fetchReservations(), 5000, []),
         timeout(fetchRooms(), 5000, []),
@@ -105,7 +110,9 @@ export const useStore = create<AppState>((set, get) => ({
         timeout(fetchVipGuests(), 5000, []),
         timeout(fetchCommissionRates(), 5000, []),
       ]);
-      set({ reservations, rooms, expenses, vipGuests, commissionRates, loading: false });
+      // 혹시 fetch에 포함된 cancelled 가 있어도 클라이언트에서 제외
+      const activeReservations = reservations.filter((r) => r.status !== 'cancelled');
+      set({ reservations: activeReservations, rooms, expenses, vipGuests, commissionRates, loading: false });
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to load data',
@@ -181,6 +188,21 @@ export const useStore = create<AppState>((set, get) => ({
       await deleteReservationDb(id);
     } catch (err) {
       set({ reservations: prev, error: err instanceof Error ? err.message : 'Failed to delete' });
+    }
+  },
+
+  deleteReservationsByExternalIds: async (externalIds) => {
+    if (externalIds.length === 0) return 0;
+    const prev = get().reservations;
+    const idSet = new Set(externalIds);
+    set((state) => ({
+      reservations: state.reservations.filter((r) => !idSet.has(r.external_id)),
+    }));
+    try {
+      return await deleteReservationsByExternalIds(externalIds);
+    } catch (err) {
+      set({ reservations: prev, error: err instanceof Error ? err.message : 'Failed to bulk delete' });
+      return 0;
     }
   },
 

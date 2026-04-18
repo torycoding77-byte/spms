@@ -385,22 +385,15 @@ export default function ReservationModal({ reservation: res, onClose }: Props) {
               체크아웃 처리
             </button>
           )}
-          {(res.status === 'confirmed' || res.status === 'checked_in') && (
-            <button
-              onClick={() => handleStatusChange('cancelled')}
-              className="px-4 bg-red-50 text-red-600 py-2 rounded-lg text-sm font-medium hover:bg-red-100"
-            >
-              취소
-            </button>
-          )}
+          {/* 취소 = 완전 삭제 (정책) */}
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="px-3 bg-red-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center gap-1"
-            title="예약 영구 삭제"
+            className="px-4 bg-red-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center gap-1"
+            title="예약 취소 (완전 삭제)"
           >
             <Trash2 size={14} />
-            {deleting ? '삭제중' : '삭제'}
+            {deleting ? '삭제중' : '취소/삭제'}
           </button>
         </div>
       </div>

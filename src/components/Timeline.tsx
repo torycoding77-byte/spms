@@ -44,8 +44,9 @@ export default function Timeline() {
     const end = new Date(dates[dates.length - 1]);
     end.setDate(end.getDate() + 1);
 
-    // 취소 예약도 노출 (시각적으로 흐리게 표시) → 예약관리 페이지와 데이터 일치
+    // 취소는 삭제 처리되므로 제외 (방어적)
     return reservations.filter((r) => {
+      if (r.status === 'cancelled') return false;
       const checkIn = new Date(r.check_in);
       const checkOut = new Date(r.check_out);
       return checkIn < end && checkOut > start;
@@ -415,13 +416,11 @@ export default function Timeline() {
                     {roomReservations.map((res) => {
                       const style = getReservationStyle(res);
                       const isHourly = res.stay_type === 'hourly';
-                      const isCancelled = res.status === 'cancelled';
                       return (
                         <div
                           key={res.id}
-                          draggable={!isCancelled}
+                          draggable
                           onDragStart={(e) => {
-                            if (isCancelled) { e.preventDefault(); return; }
                             const rect = e.currentTarget.getBoundingClientRect();
                             const offsetRatio = (e.clientX - rect.left) / rect.width;
                             setDragInfo({ reservationId: res.id, type: 'existing', offsetRatio });
@@ -429,21 +428,18 @@ export default function Timeline() {
                           }}
                           onDragEnd={() => { setDragInfo(null); setDropPreview(null); }}
                           className={cn(
-                            'reservation-block flex items-center px-2 text-white text-xs font-medium overflow-hidden border',
-                            isCancelled
-                              ? 'bg-gray-300 border-gray-400 line-through opacity-60 cursor-pointer'
-                              : isHourly
-                                ? `${getBlockColor(res)} border-dashed border-white/50 cursor-grab active:cursor-grabbing`
-                                : `${getBlockColor(res)} border-transparent cursor-grab active:cursor-grabbing`,
+                            'reservation-block flex items-center px-2 text-white text-xs font-medium overflow-hidden border cursor-grab active:cursor-grabbing',
+                            isHourly
+                              ? `${getBlockColor(res)} border-dashed border-white/50`
+                              : `${getBlockColor(res)} border-transparent`,
                             dragInfo?.reservationId === res.id && 'opacity-50'
                           )}
                           style={style}
                           onClick={(e) => { e.stopPropagation(); setSelectedReservation(res); }}
-                          title={`${res.guest_name} | ${getSourceLabel(res.source)} | ${isHourly ? '대실' : '숙박'}${isCancelled ? ' | 취소됨' : ''} | ${formatCurrency(res.sale_price)}`}
+                          title={`${res.guest_name} | ${getSourceLabel(res.source)} | ${isHourly ? '대실' : '숙박'} | ${formatCurrency(res.sale_price)}\n드래그하여 객실/시간 변경`}
                         >
                           <span className="truncate">
-                            {isCancelled && '[취소] '}
-                            {isHourly && !isCancelled && '[대] '}
+                            {isHourly && '[대] '}
                             {res.guest_name} ({formatTime(res.check_in)}-{formatTime(res.check_out)})
                           </span>
                         </div>

@@ -110,6 +110,33 @@ export async function deleteReservationDb(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// 여러 id 일괄 삭제
+export async function deleteReservationsByIds(ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  const { error } = await supabase.from('reservations').delete().in('id', ids);
+  if (error) throw error;
+  return ids.length;
+}
+
+// external_id 기준 일괄 삭제 (엑셀에서 취소 매칭 시 사용)
+export async function deleteReservationsByExternalIds(externalIds: string[]): Promise<number> {
+  if (externalIds.length === 0) return 0;
+  const { error } = await supabase.from('reservations').delete().in('external_id', externalIds);
+  if (error) throw error;
+  return externalIds.length;
+}
+
+// 취소 상태 레코드 전체 삭제 (일괄 정리용)
+export async function deleteAllCancelledReservations(): Promise<number> {
+  const { data, error } = await supabase
+    .from('reservations')
+    .delete()
+    .eq('status', 'cancelled')
+    .select('id');
+  if (error) throw error;
+  return (data || []).length;
+}
+
 // ==================== Rooms ====================
 
 export async function fetchRooms(): Promise<Room[]> {

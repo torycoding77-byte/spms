@@ -16,7 +16,6 @@ const STATUS_OPTIONS: { value: '' | ReservationStatus; label: string }[] = [
   { value: 'confirmed', label: '예약확정' },
   { value: 'checked_in', label: '체크인' },
   { value: 'checked_out', label: '체크아웃' },
-  { value: 'cancelled', label: '취소' },
   { value: 'no_show', label: '노쇼' },
 ];
 
