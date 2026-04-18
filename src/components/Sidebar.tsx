@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, CalendarDays, Upload, BedDouble,
   Receipt, Users, ChevronLeft, ChevronRight, Wrench,
-  BarChart3, Settings, Menu, X, Calculator, ClipboardList, LogOut, SprayCan
+  BarChart3, Settings, Menu, X, Calculator, ClipboardList, LogOut, SprayCan, TrendingUp
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { useAuthStore, MENU_KEY_TO_HREF, MENU_LABELS } from '@/store/useAuthStore';
@@ -20,6 +20,7 @@ const MENU_ICONS: Record<MenuKey, typeof LayoutDashboard> = {
   rooms: BedDouble,
   housekeeping: SprayCan,
   maintenance: Wrench,
+  sales: TrendingUp,
   expenses: Receipt,
   crm: Users,
   settlement: Calculator,

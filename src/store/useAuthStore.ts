@@ -23,7 +23,7 @@ export interface UserAccount {
 // 메뉴 경로 키
 export type MenuKey =
   | 'dashboard' | 'reservations' | 'timeline' | 'upload'
-  | 'rooms' | 'housekeeping' | 'maintenance' | 'expenses'
+  | 'rooms' | 'housekeeping' | 'maintenance' | 'sales' | 'expenses'
   | 'crm' | 'settlement' | 'reports' | 'settings';
 
 export const MENU_KEY_TO_HREF: Record<MenuKey, string> = {
@@ -34,6 +34,7 @@ export const MENU_KEY_TO_HREF: Record<MenuKey, string> = {
   rooms: '/rooms',
   housekeeping: '/housekeeping',
   maintenance: '/maintenance',
+  sales: '/sales',
   expenses: '/expenses',
   crm: '/crm',
   settlement: '/settlement',
@@ -49,6 +50,7 @@ export const MENU_LABELS: Record<MenuKey, string> = {
   rooms: '객실 관리',
   housekeeping: '하우스키핑',
   maintenance: '유지보수',
+  sales: '매출내역',
   expenses: '지출 관리',
   crm: '고객 관리',
   settlement: '정산 보고서',
@@ -64,7 +66,7 @@ export type RolePermissions = Record<UserRole, MenuKey[]>;
 const DEFAULT_PERMISSIONS: RolePermissions = {
   admin: [...ALL_MENU_KEYS],
   housekeeper: ['housekeeping'],
-  frontdesk: ['dashboard', 'reservations', 'timeline', 'rooms', 'housekeeping', 'crm'],
+  frontdesk: ['dashboard', 'reservations', 'timeline', 'rooms', 'housekeeping', 'sales', 'crm'],
 };
 
 const DEFAULT_ACCOUNTS: UserAccount[] = [
@@ -86,7 +88,15 @@ const ACCOUNTS_KEY = 'flamingo_accounts';
 function loadPermissions(): RolePermissions {
   try {
     const raw = localStorage.getItem(PERMISSIONS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const saved = JSON.parse(raw) as RolePermissions;
+      // admin은 항상 모든 메뉴 접근 가능하도록 보정 (신규 메뉴 추가 시 자동 반영)
+      return {
+        ...DEFAULT_PERMISSIONS,
+        ...saved,
+        admin: [...ALL_MENU_KEYS],
+      };
+    }
   } catch { /* use defaults */ }
   return { ...DEFAULT_PERMISSIONS };
 }
