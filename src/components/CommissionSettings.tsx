@@ -182,15 +182,17 @@ export default function CommissionSettings() {
         </div>
       </div>
 
-      {/* 일괄 재계산 */}
+      {/* 일괄 재계산 1: 수수료율 기반 (판매금액 × 수수료율%) */}
       <div className="bg-white rounded-xl border p-4">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-semibold text-gray-700 flex items-center gap-2">
-              <RefreshCw size={16} /> 수수료 일괄 재계산
+              <RefreshCw size={16} /> 수수료율 기반 재계산
             </h3>
             <p className="text-xs text-gray-400 mt-1">
-              기존 예약의 수수료를 현재 설정된 수수료율로 다시 계산합니다.
+              OTA 예약의 수수료를 위 설정된 <b>수수료율(%)</b>로 다시 계산합니다.
+              <br />
+              <span className="text-gray-400">공식: 판매금액 × 수수료율% → 정산금액도 재설정</span>
             </p>
           </div>
           <button
@@ -222,9 +224,53 @@ export default function CommissionSettings() {
                 message: `${count}건의 예약 수수료가 업데이트되었습니다.`,
               });
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-900"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-900 whitespace-nowrap"
           >
             <RefreshCw size={14} /> 일괄 재계산
+          </button>
+        </div>
+      </div>
+
+      {/* 일괄 재계산 2: 판매 − 정산 기반 (엑셀 값 그대로 유지) */}
+      <div className="bg-white rounded-xl border border-blue-200 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+              <RefreshCw size={16} className="text-blue-600" /> 판매 − 정산 기반 재계산
+            </h3>
+            <p className="text-xs text-gray-400 mt-1">
+              모든 예약의 수수료를 <b>판매금액 − 정산금액</b>으로 다시 계산합니다.
+              <br />
+              <span className="text-gray-400">엑셀 업로드 값(판매금액·입금예정가)은 건드리지 않고 수수료 컬럼만 보정합니다.</span>
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              const target = reservations.filter((r) => r.status !== 'cancelled');
+              if (target.length === 0) {
+                showToast({ type: 'info', title: '재계산 대상 없음', message: '활성 예약이 없습니다.' });
+                return;
+              }
+              if (!confirm(`${target.length}건의 예약 수수료를\n"판매금액 − 정산금액"으로 재계산합니다.\n진행할까요?`)) return;
+              let count = 0;
+              let skipped = 0;
+              for (const res of target) {
+                const newCommission = Math.max(0, res.sale_price - res.settlement_price);
+                if (newCommission === res.commission) { skipped++; continue; }
+                try {
+                  await updateReservation(res.id, { commission: newCommission });
+                  count++;
+                } catch { /* ignore individual failure */ }
+              }
+              showToast({
+                type: 'success',
+                title: '재계산 완료',
+                message: `${count}건 업데이트 · ${skipped}건 이미 일치 (총 ${target.length}건)`,
+              });
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 whitespace-nowrap"
+          >
+            <RefreshCw size={14} /> 판매−정산 재계산
           </button>
         </div>
       </div>
