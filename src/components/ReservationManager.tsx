@@ -51,6 +51,14 @@ export default function ReservationManager() {
     const nextDay = new Date(target);
     nextDay.setDate(nextDay.getDate() + 1);
     return reservations.filter((r) => {
+      // 미배정 현장예약은 체크인 일정이 확정되지 않은 상태 →
+      // 예약일시(reserved_at or created_at) 기준으로 해당 날짜에만 노출
+      if (r.source === 'walkin' && !r.room_number) {
+        const basis = r.reserved_at || r.created_at;
+        if (!basis) return false;
+        const d = new Date(basis);
+        return d >= target && d < nextDay;
+      }
       const checkIn = new Date(r.check_in);
       const checkOut = new Date(r.check_out);
       return checkIn < nextDay && checkOut > target;
@@ -221,7 +229,14 @@ export default function ReservationManager() {
                       {res.room_number ? `${res.room_number}호` : <span className="text-orange-500 text-xs">미배정</span>}
                     </td>
                     <td className="px-4 py-3 text-gray-600">
-                      {formatDate(res.check_in)} ~ {formatDate(res.check_out)}
+                      {res.source === 'walkin' && !res.room_number ? (
+                        <div>
+                          <div className="text-xs text-orange-500">미배정 · 예약일시</div>
+                          <div>{formatDate(res.reserved_at || res.created_at)}</div>
+                        </div>
+                      ) : (
+                        <>{formatDate(res.check_in)} ~ {formatDate(res.check_out)}</>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className={cn(
